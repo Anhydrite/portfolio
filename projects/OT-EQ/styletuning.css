@@ -1,0 +1,88 @@
+@font-face { 	
+  font-family:  "NotoSans-Regular.ttf"; src: url('./font/NotoSans-Regular.ttf'); 
+  }
+@font-face { 	
+     
+    font-family: "NotoSans-Condensed.ttf"; src: url('./font/NotoSans-Condensed.ttf');}
+
+#warped {position: relative; display: block; width:588px; height:440px;}
+
+#warped>span[class^=w]:nth-of-type(n+0){display:block; position:absolute;
+-moz-transform-origin:50% 100%; -webkit-transform-origin:50% 100%; -o-transform-origin:50%
+100%; -ms-transform-origin:50% 100%; transform-origin:50% 100%; }
+
+#warped span{font-family:'NotoSans-Condensed.ttf';  font-size:48px;font-weight:regular;font-style:normal;
+line-height:0.65; white-space:pre; overflow:visible; padding:0px;}
+
+.horizTranslate {
+-webkit-transition: 3s;
+-moz-transition: 3s;
+-ms-transition: 3s;
+-o-transition: 3s;
+transition: 3s;
+}
+
+html {
+font-size: 7px;
+}
+body {
+background: salmon;
+font-family: 'NotoSans-Regular.ttf';
+font-weight: 200;
+font-size: 20px;
+}
+.words {
+background: lightgray;
+padding: 1rem 1rem 1rem 5rem;
+top: 20px;
+margin: 10px auto;
+z-index:10;
+
+}
+
+.sticky{
+z-index:10;
+position: fixed;
+padding: 1rem 2rem 1rem 5rem;
+width:520px;
+margin: 10px auto;
+top: 20px;
+
+}
+.prog{
+z-index: 10;
+}
+
+svg{
+width: 100%;
+height: 100%;
+padding: 0;
+margin: 0;
+position: fixed;
+
+}
+
+h1{
+width: 100%;
+font-family: sans-serif;
+position:absolute;
+text-align:center;
+color:white;
+font-size: 18px;
+top: 40%;
+opacity: 1;
+transition: opacity 1s ease-in-out;
+-moz-transition: opacity 1s ease-in-out;
+-webkit-transition: opacity 1s ease-in-out;
+}
+
+h1 a{
+color: #48b1f4;
+text-decoration:none;
+}
+
+path{
+stroke-linecap: square;
+stroke: white;
+stroke-width: 0.5px;
+}
