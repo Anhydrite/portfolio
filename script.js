@@ -48,17 +48,17 @@ $(".github").click(function() {
 });
 
 $(".oteq").click(function() {
-  window.location.replace('projects/OT-EQ/index.html');
+  window.location.href = 'projects/OT-EQ/index.html';
   return false;
 });
 
 $(".stegosaurus").click(function() {
-  window.location.replace("projects/Stegosaurus/index.html");
+  window.location.href= "projects/Stegosaurus/index.html";
   return false;
 });
 
 $(".monopong").click(function() {
-  window.location.replace('projects/Neuroevolution1/index.html')
+  window.location.href = 'projects/Neuroevolution1/index.html';
   return false;
 });
 
