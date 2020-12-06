@@ -96,13 +96,6 @@ body {
 }
 
 
-/* Media qurey section */
-
-@media screen and (min-width: 768px) and (max-width: 1024px) {
-    .container {
-        margin: 0;
-    }
-}
 
 
 
@@ -572,18 +565,49 @@ body {
       color: white;
   }
 
-  .alignBadge{
-      align-items: center;
-      text-align: center;
-      display:block;
-      left: 50%;
-  }
 
-
-.badge{
-    width: 75%;
+@media screen and (max-width: 1024px) {
+    .container {
+        margin: 0;
+    }
+    .portfolio-body-res{
+        padding-top: 3%;
+        box-sizing: content-box;
+        display: grid;
+        grid-template-columns: repeat(2, calc(97vw/2));
+        grid-auto-flow: dense;
+        margin-right: 50%;
+        text-align: center;
+        
+    }
+    .portfolio-body{
+        padding-top: 3%;
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: repeat(2, calc(100vw/2));
+        grid-template-rows: repeat(2, 1fr);
+        /* grid-gap: 3rem; */
+        grid-auto-flow: dense;
+        
+    
+         /* display: flex;
+         flex-wrap: wrap;
+         flex-direction: row; */
+    }
+    .badge{
+        width: 75%;
+    }
 }
-@media screen and (max-width:1024px) {
+
+/* Media qurey section */
+
+@media screen and (min-width: 768px) and (max-width: 1024px) {
+    .container {
+        margin: 0;
+    }
+}
+
+@media screen and (max-width:768px) {
     .navTrigger {
         display: block;
     }
@@ -623,29 +647,6 @@ body {
     .nav div.media_button {
         display: block;
     }
-    .portfolio-body-res{
-        padding-top: 3%;
-        box-sizing: content-box;
-        display: grid;
-        grid-template-columns: repeat(2, calc(97vw/2));
-        grid-auto-flow: dense;
-        margin-right: 50%;
-        text-align: center;
-        
-    }
-    .portfolio-body{
-        padding-top: 3%;
-        box-sizing: border-box;
-        display: grid;
-        grid-template-columns: repeat(2, calc(100vw/2));
-        grid-template-rows: repeat(2, 1fr);
-        /* grid-gap: 3rem; */
-        grid-auto-flow: dense;
-        
-    
-         /* display: flex;
-         flex-wrap: wrap;
-         flex-direction: row; */
-    }
 
+        
 }
