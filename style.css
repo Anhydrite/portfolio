@@ -583,7 +583,7 @@ body {
 .badge{
     width: 75%;
 }
-@media screen and (max-width:1024px) {
+@media screen and (max-width:800px) {
     .navTrigger {
         display: block;
     }
@@ -630,6 +630,7 @@ body {
         grid-template-columns: repeat(2, calc(97vw/2));
         grid-auto-flow: dense;
         margin-right: 50%;
+        text-align: center;
         
     }
     .portfolio-body{
