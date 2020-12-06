@@ -513,6 +513,7 @@ body {
     border-bottom: outset;
     text-align: center;
     transition: 500ms;
+    text-align: center;
     
 }
 .portfolio-card-res:hover{
@@ -529,6 +530,9 @@ body {
     padding: 0.5rem;
     max-width: 300px;
     color: rgba(0, 0, 0, 0.37);
+    text-align: center;
+    flex:center;
+
 }
 
 .portfolio-body-res{
@@ -538,11 +542,12 @@ body {
 	grid-template-columns: repeat(6, calc(97vw/6));
     grid-auto-flow: dense;
     margin-right: 50%;
+    text-align: center;
     
 }
 .img-t-res{
 	display: block;
-	width: 99%;
+	width: 100%;
 	height: auto;
     border-radius: 5px 5px 5px 5px;
     background-size: cover;
@@ -588,7 +593,7 @@ body {
         grid-template-rows: repeat(2, 1fr);
         /* grid-gap: 3rem; */
         grid-auto-flow: dense;
-        
+        text-align: center;
     
          /* display: flex;
          flex-wrap: wrap;
@@ -596,6 +601,21 @@ body {
     }
     .badge{
         width: 75%;
+    }
+    .portfolio-card-res h3{
+        font-size: medium;
+        overflow-wrap: break-word;
+        padding: 0.5rem;
+        color: rgba(0, 0, 0, 0.37);
+        margin-left: 10%;
+    }
+    .portfolio-card-res{
+        margin: 6% 6%;
+        border: 3px;
+        border-bottom: outset;
+        text-align: center;
+        transition: 500ms;
+        text-align: center;
     }
 }
 
@@ -647,6 +667,11 @@ body {
     .nav div.media_button {
         display: block;
     }
+    .portfolio-card-res h3{
+        font-size: medium;
+        overflow-wrap: break-word;
+        padding: 0.5rem;
+        color: rgba(0, 0, 0, 0.37);
+    }
 
-        
 }
