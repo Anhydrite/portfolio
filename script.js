@@ -70,16 +70,15 @@ $(".monopong").click(function() {
 
 
 window.addEventListener('load', function() {
-  writingAnimation();
-  setInterval(writingAnimation, 8000);
+  setTimeout(()=>{writingAnimation();setInterval(writingAnimation, 7000);}, 700);
 });
 
 function writingAnimation(){
   var ctx = document. querySelector('canvas').getContext('2d');
-  ctx.clearRect(0,0,1000,400);
+  ctx.clearRect(0,0,1200,400);
   var brushWidth = 600;
   var brushOffset = brushWidth;
-  var speed = 7;
+  var speed = 4;
   var txt = "Robin";
   var x = -10, i = 0;
   ctx.font = '6cm ZapfinoForteLTPro'; ctx.lineWidth = 1; ctx.fillStyle = '#000'; ctx.strokeStyle='white';
@@ -92,6 +91,7 @@ function writingAnimation(){
   if (i < txt.length) requestAnimationFrame(draw); }
                       
   })() ;
+  
 }
 
 class TextScramble {
