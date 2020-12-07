@@ -70,7 +70,7 @@ $(".monopong").click(function() {
 
 
 window.addEventListener('load', function() {
-  setTimeout(()=>{writingAnimation();setInterval(writingAnimation, 7000);}, 700);
+  setTimeout(()=>{writingAnimation();setInterval(writingAnimation, 7000);}, 1000);
 });
 
 function writingAnimation(){
