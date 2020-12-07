@@ -76,15 +76,15 @@ window.addEventListener('load', function() {
 
 function writingAnimation(){
   var ctx = document. querySelector('canvas').getContext('2d');
-  ctx.clearRect(0,0,1000,200);
+  ctx.clearRect(0,0,1000,400);
   var brushWidth = 600;
   var brushOffset = brushWidth;
   var speed = 7;
   var txt = "Robin";
-  var x = 0, i = 0;
+  var x = -10, i = 0;
   ctx.font = '6cm ZapfinoForteLTPro'; ctx.lineWidth = 1; ctx.fillStyle = '#000'; ctx.strokeStyle='white';
     
-  (function draw() { ctx.setLineDash([brushWidth - brushOffset, brushOffset - speed]); brushOffset -= speed; ctx.strokeText(txt[i], x, 140);
+  (function draw() { ctx.setLineDash([brushWidth - brushOffset, brushOffset - speed]); brushOffset -= speed; ctx.strokeText(txt[i], x, 240);
                     
   if (brushOffset > 0) requestAnimationFrame(draw); else {
   brushOffset = brushWidth;
