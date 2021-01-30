@@ -1,0 +1,281 @@
+@import url('https://fonts.googleapis.com/css2?family=Hind:wght@300&display=swap');
+
+@import url('https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@200&family=Tajawal&display=swap');
+
+.country {
+  stroke: darkslategrey;
+  fill: rgb(182, 182, 206);
+  transition: all 0.25s ease-in-out;
+}
+
+.point {
+  fill: cadetblue;
+}
+
+.temperature {
+  font-size: 1.5em;
+  font-weight: 900;
+  text-shadow:
+    0.03em 0 rgb(255, 255, 255),
+    0 0.03em rgb(255, 255, 255),
+    -0.03em 0 rgb(255, 255, 255),
+    0 -0.03em rgb(255, 255, 255);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-decoration: none;
+}
+
+body {
+  font-family: 'Josefin Sans', sans-serif;
+  background-color: #18182c;
+}
+
+.header {
+  z-index: 10000000;
+  /* Technique ultime du z-index  */
+  width: 100%;
+  height: 80px;
+  display: block;
+  background-color: #101010;
+  overflow: hidden;
+  margin-bottom: 3%;
+  position: fixed;
+}
+
+.inner_header {
+  width: 100%;
+  height: 100%;
+  transform: translate(0, 0);
+  display: block;
+  margin: 0 10px;
+  overflow: hidden;
+}
+
+.logo_container {
+  height: 100%;
+  display: table;
+  float: left;
+}
+
+.logo_container h1 {
+  color: white;
+  height: 100%;
+  display: table-cell;
+  vertical-align: middle;
+  font-family: 'Josefin Sans', sans-serif;
+  font-size: 32px;
+  font-weight: 50;
+}
+
+.logo_container h1 span {
+  vertical-align: middle;
+  font-weight: 800;
+  float: left;
+}
+
+.navigation {
+  float: right;
+  height: 100%;
+}
+
+.navigation a {
+  height: 100%;
+  display: table;
+  float: left;
+  padding: 0px;
+}
+
+.navigation a:last-child {
+  padding-right: 0;
+}
+
+.navigation a li {
+  display: table-cell;
+  vertical-align: middle;
+  height: 100%;
+  color: white;
+  font-family: 'Hind', sans-serif;
+  font-size: 16px;
+  padding: 20px;
+}
+
+
+.snake1 {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(to right, rgb(92, 209, 186), rgb(175, 96, 209));
+  animation: animate-bottom 4s linear infinite;
+}
+
+.snake2 {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(to right, rgb(175, 96, 209), rgb(92, 209, 186));
+  animation: anim2 4s linear infinite;
+}
+
+@keyframes animate-bottom {
+  0% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes anim2 {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  -ms-appearance: none;
+  appearance: none;
+  outline: 0;
+  box-shadow: none;
+  border: 0 !important;
+  background: #2c3e50;
+  background-image: none;
+}
+
+select::-ms-expand {
+  display: none;
+}
+
+.select {
+  position: relative;
+  display: flex;
+  width: 50%;
+  height: 3em;
+  line-height: 3;
+  background: #2c3e50;
+  overflow: hidden;
+  border-radius: .25em;
+}
+
+select {
+  font-size: 1.3em;
+  flex: 1;
+  padding: 0 .5em;
+  color: #fff;
+  cursor: pointer;
+}
+
+/* Arrow */
+.select::after {
+  content: '\25BC';
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0 1em;
+  background: #34495e;
+  cursor: pointer;
+  pointer-events: none;
+  -webkit-transition: .25s all ease;
+  -o-transition: .25s all ease;
+  transition: .25s all ease;
+}
+
+.select:hover::after {
+  color: #f39c12;
+}
+
+label {
+  font-size: 1.2em;
+  float: left;
+  width: 10em;
+}
+
+.menu {
+  display: flex;
+  align-items: center;
+  width: auto;
+}
+
+#divSelectStation {
+  text-align: center;
+  width: auto;
+  height: 50px;
+}
+
+#selectStation {
+  display: block;
+  margin: 0 auto;
+  margin-bottom: 0;
+  text-align: center;
+  text-align-last: center;
+}
+
+#contentMap {
+  padding-top: 6em;
+}
+
+
+.axisWhite line {
+  stroke: rgb(255, 255, 255);
+}
+
+.axisWhite path {
+  stroke: rgb(255, 255, 255);
+}
+
+.axisWhite text {
+  fill: rgb(255, 255, 255);
+  font-size: large;
+}
+
+.tooltip {
+  z-index: 10000000;
+  position: absolute;
+  text-align: center;
+  font-family: verdana;
+  width: auto;
+  height: 12px;
+  margin-top: -20px;
+  font-size: x-large;
+  pointer-events: none;
+  font-weight: 900;
+  text-shadow:
+    0.02em 0 rgb(255, 255, 255),
+    0 0.02em rgb(255, 255, 255),
+    -0.02em 0 rgb(255, 255, 255),
+    0 -0.02em rgb(255, 255, 255);
+}
+
+#lineChart {
+  margin-top: 10%;
+  width: 100%;
+  height: 50%;
+  position: absolute;
+  min-width: 1000px;
+  padding-bottom: 50%;
+}
+
+.chartsTitles {
+  margin-top:4%;
+  color: white;
+  text-align: center;
+  font-size: xx-large;
+}
+
+table{
+  background-color:white;
+}
