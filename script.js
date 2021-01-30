@@ -62,7 +62,10 @@ $(".monopong").click(function() {
   return false;
 });
 
-
+$(".dataviz").click(function() {
+  window.location.href = 'projects/dataviz/index.html';
+  return false;
+});
 
 
 
