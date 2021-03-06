@@ -87,7 +87,15 @@ var x = -10, i = 0;
   
 
 async function writingAnimation(){
-    ctx.clearRect(0,0,1200,400);
+
+  var ctx = document.querySelector('canvas').getContext('2d');
+  var brushWidth = 600;
+  var brushOffset = brushWidth;
+  var speed = 4;
+  var txt = "Robin";
+  var x = -10, i = 0;
+ctx.font = '6cm ZapfinoForteLTPro'; ctx.lineWidth = 1; ctx.fillStyle = '#000'; ctx.strokeStyle='white';
+      ctx.clearRect(0,0,1200,400);
  
     (function draw() { ctx.setLineDash([brushWidth - brushOffset, brushOffset - speed]); brushOffset -= speed; ctx.strokeText(txt[i], x, 240);
                       
