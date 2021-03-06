@@ -91,7 +91,7 @@ async function writingAnimation(){
   var ctx = document.querySelector('canvas').getContext('2d');
   var brushWidth = 600;
   var brushOffset = brushWidth;
-  var speed = 4;
+  var speed = 10;
   var txt = "Robin";
   var x = -10, i = 0;
 ctx.font = '6cm ZapfinoForteLTPro'; ctx.lineWidth = 1; ctx.fillStyle = '#000'; ctx.strokeStyle='white';
