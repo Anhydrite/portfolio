@@ -76,24 +76,31 @@ window.addEventListener('load', function() {
   setTimeout(()=>{writingAnimation();setInterval(writingAnimation, 7000);}, 1000);
 });
 
+
+
 async function writingAnimation(){
-  var ctx = await document.querySelector('canvas').getContext('2d');
-  ctx.clearRect(0,0,1200,400);
-  var brushWidth = 600;
-  var brushOffset = brushWidth;
-  var speed = 4;
-  var txt = "Robin";
-  var x = -10, i = 0;
-  ctx.font = await '6cm ZapfinoForteLTPro'; ctx.lineWidth = 1; ctx.fillStyle = '#000'; ctx.strokeStyle='white';
-    
-  (function draw() { ctx.setLineDash([brushWidth - brushOffset, brushOffset - speed]); brushOffset -= speed; ctx.strokeText(txt[i], x, 240);
-                    
-  if (brushOffset > 0) requestAnimationFrame(draw); else {
-  brushOffset = brushWidth;
-  x += ctx.measureText(txt[i++]).width + ctx.lineWidth * Math.random();
-  if (i < txt.length) requestAnimationFrame(draw); }
+  var image = new Image;
+  image.src = "url qui n'existe pas";
+  image.onerror = function() {
+    var ctx = document.querySelector('canvas').getContext('2d');
+    ctx.clearRect(0,0,1200,400);
+    var brushWidth = 600;
+    var brushOffset = brushWidth;
+    var speed = 4;
+    var txt = "Robin";
+    var x = -10, i = 0;
+    ctx.font = '6cm ZapfinoForteLTPro'; ctx.lineWidth = 1; ctx.fillStyle = '#000'; ctx.strokeStyle='white';
+      
+    (function draw() { ctx.setLineDash([brushWidth - brushOffset, brushOffset - speed]); brushOffset -= speed; ctx.strokeText(txt[i], x, 240);
                       
-  })() ;
+    if (brushOffset > 0) requestAnimationFrame(draw); else {
+    brushOffset = brushWidth;
+    x += ctx.measureText(txt[i++]).width + ctx.lineWidth * Math.random();
+    if (i < txt.length) requestAnimationFrame(draw); }
+                        
+    })() ;
+  };
+  
   
 }
 
