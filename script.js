@@ -73,15 +73,12 @@ $(".dataviz").click(function() {
 
 
 window.addEventListener('load', function() {
-  setTimeout(()=>{writingAnimation();setInterval(writingAnimation, 7000);}, 1000);
+  setTimeout(()=>{writingAnimation();setInterval(writingAnimation, 7000);}, 1500);
 });
 
 
 
 async function writingAnimation(){
-  var image = new Image;
-  image.src = "url qui n'existe pas";
-  image.onerror = function() {
     var ctx = document.querySelector('canvas').getContext('2d');
     ctx.clearRect(0,0,1200,400);
     var brushWidth = 600;
@@ -99,9 +96,6 @@ async function writingAnimation(){
     if (i < txt.length) requestAnimationFrame(draw); }
                         
     })() ;
-  };
-  
-  
 }
 
 
