@@ -63,7 +63,7 @@ $(".monopong").click(function() {
 });
 
 $('#clapButton').click(function(){
-  fetch("http://robinzmuda.fr:8080/clap", {method:"PUT"}).then(async (response)=>{
+  fetch("https://robinzmuda.com:8080/clap", {method:"PUT"}).then(async (response)=>{
     document.getElementById("clapCount").innerHTML = await  response.text();
   })
 })
