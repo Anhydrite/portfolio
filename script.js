@@ -61,7 +61,7 @@ $(".monopong").click(function() {
   window.location.href = 'projects/Neuroevolution1/index.html';
   return false;
 });
-
+/*
 $('#clapButton').click(function(){
   let audio = new Audio('audio.mp3');
   audio.play();
@@ -69,7 +69,7 @@ $('#clapButton').click(function(){
     document.getElementById("clapCount").innerHTML = await  response.text();
   })
 })
-
+*/
 
 $(".dataviz").click(function() {
   window.location.href = 'projects/dataviz/index.html';
