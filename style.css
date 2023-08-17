@@ -333,7 +333,7 @@ body {
     padding-bottom: 5%;
     background-color: black;
     background-image: url(
-        https://www.artelements.net/wp-content/uploads/2018/11/winter-nature-season-trees-66284.jpeg
+        ./assets/montagne.JPG
         );
     background-position: center top;
 	background-size:cover;
@@ -363,7 +363,7 @@ body {
     margin: 5% 5%;
     border: 3px;
     border-bottom: outset;
-    border-color: rgba(0, 0, 0, 0.771);
+    border-color: rgba(241, 9, 9, 0.771);
 	border-radius: 1px 1px 1px 1px;
     text-align: center;
     bottom:0;
@@ -373,13 +373,19 @@ body {
     cursor: pointer;
 	transform: scale(1.1);
     color: #0c30ff;
+    border-color: rgba(0, 82, 247, 0.771);
+}
+.portfolio-card:hover h3{
+    color: rgb(255, 255, 255);
+	transition: 500ms;
 }
 
+
 .portfolio-card h3{
-    font-size: large;
+    font-size: 200%;
 	/* margin-top: 0.5rem; */
 	padding: 0.5rem;
-	color: rgba(0, 0, 0, 0.874);
+	color: rgba(240, 240, 240, 0.877);
 }
 
 .myLife{
