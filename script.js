@@ -78,12 +78,7 @@ $(".dataviz").click(function() {
 
 
 window.addEventListener('load', function() {
-  fetch("https://robinzmuda.com:8080/clap", {method:"GET"}).then(async (response)=>{
-    document.getElementById("clapCount").innerHTML = await  response.text();
-  })
-
 ctx.font = '6cm ZapfinoForteLTPro'; ctx.lineWidth = 1; ctx.fillStyle = '#000'; ctx.strokeStyle='white';
-
   setTimeout(()=>{writingAnimation();setInterval(writingAnimation, 7000);}, 1000);
 });
 
