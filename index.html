@@ -1,13 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>Portfolio Robin ZMUDA</title>
-    <link rel="stylesheet" href="./style.css">
-    <!-- font loaded via CSS @font-face -->
-    <link rel="icon" href="./assets/turtle.png">
-
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Robin ZMUDA — Développeur Cybersécurité</title>
+<link rel="stylesheet" href="./style.css">
+<link rel="icon" href="./assets/turtle.png">
 
 <!-- Google Tag Manager -->
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
@@ -15,207 +13,107 @@
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-5CNPN97');</script>
-    <!-- End Google Tag Manager -->
+<!-- End Google Tag Manager -->
 </head>
-
 <body>
-<!-- Google Tag Manager (noscript) -->
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5CNPN97"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <!-- End Google Tag Manager (noscript) -->
-    <!-- partial:index.partial.html -->
-    <nav class="nav">
-        <div class="container">
-            <div class="logo">
-                <a href="#">Accueil</a>
-            </div>
-            <div id="mainListDiv" class="main_list">
-                <ul class="navlinks">
-                    <li><a href="#aboutAnchor">À propos</a></li>
-                    <li><a href="#projectAnchor">Mes projets</a></li>
-                    <li><a href="#contactAnchor">Contact</a></li>
-                </ul>
-            </div>
-            <span class="navTrigger">
-                <i></i>
-                <i></i>
-                <i></i>
-            </span>
-        </div>
 
-    </nav>
+<div id="prog"></div>
+<div id="particles"></div>
 
-    <section class="home">
+<!-- DOCK NAV -->
+<nav class="dock">
+  <a href="#hero" class="active">Accueil</a>
+  <a href="#about">À propos</a>
+  <a href="#skills">Skills</a>
+  <a href="#projects">Projets</a>
+  <a href="#contact">Contact</a>
+</nav>
 
-        <div class="opaque-bg animated fadeInDown">
-
-            <div>
-                <canvas width="380" height="300"></canvas>
-                <h1 style="color:white;margin-left:5%;">Robin<span style="color:#FF6363">/</span>Zmuda</h1>
-                <p><span id="holder">Expert et développeur cybersécurité</span><span class="blinking-cursor">|</span>
-                </p>
-                
-            </div>
-
-        </div>
-
-    </section>
-    <a id="aboutAnchor"></a>
-    <div class="myLife">
-        <div class="subTitle">
-            <div class="container">
-                <div class="titreAbout"></div>
-            </div>
-        </div>
-
-
-        <div class="containerChart">
-
-            <div class="chart" data-percent="80">HTML5</div>
-            <div class="chart" data-percent="50">CSS3</div>
-            <div class="chart" data-percent="80">JavaScript</div>
-            <div class="chart" data-percent="60">jQuery</div>
-            <div class="chart" data-percent="80">NodeJS</div>
-            <div class="chart" data-percent="70">PHP</div>
-            <div class="chart" data-percent="60">C</div>
-            <div class="chart" data-percent="55">C#</div>
-            <div class="chart" data-percent="90">Python</div>
-        </div>
-
-
-
-        <p class="myP">
-            Je me présente, Robin ZMUDA, 25 ans. Actuellement développeur cybersécurité chez Knock-Knock. 
-            Je touche à divers domaines pouvant me plaire mais je me spécialise dans la cybersécurité côté red team.
-            <br>
-            <br>
-            Je suis titulaire d'un Bachelor Concepteur de Systèmes d'informations à Cs2i Bourgogne en alternance chez Némésis Studio ainsi que d'un diplôme d'Expert cybesécurité à Bordeaux Ynov Campus.
-            <br>
-            <br>
-            J'ai appris à programmer avec des programmes en C puis en HTML/CSS et Javascript à travers des petits
-            exercices basiques d'algorithmie.
-            Après ma première année j'ai voulu me lancer dans un projet un peu plus massif que les exercices que je
-            faisais à l'école et j'ai donc programmé mon propre bot Discord et lancé plusieurs projets dans différents domaines que ce soit dans le web avec des libraires comme ThreeJS ou dans le scripting python.
-	    <br>            
-Je suis aussi un fan de réseau avec plusieurs projets à mon actif comme la création d'un cyberrange customisé, la reproduction d'infrastructures typées entreprise ainsi que la manipulation de paquets réseaux pour des buts divers et variés.
-<br>
-Enfin, pour revenir dans le monde de la cybersécurité, j'ai eu une période RootMe pendant mes études puis j'ai passé plusieurs certifications (eJPT, eCPPTv2, CRTO en cours). J'aime bien me balader sur différents outils ou solutions sur github et potentiellement contribuer quand je trouve des bugs et/ou améliorations :)	    
-<br>
-            <br>
-        </p>
-        <center>
-            <img class="badge" src="./assets/badge.png">
-        </center>
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-shade"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-content">
+    <div class="hero-left">
+      <div class="hero-crumb"><span class="pulse"></span>robin@cybersec:~$ whoami</div>
+      <h1>
+        <canvas id="sig" width="760" height="200" aria-label="Robin" style="max-width:420px"></canvas>
+        <span class="zmuda">Zmuda</span>
+      </h1>
+      <div class="hero-type"><span id="typeText"></span><span class="cur">|</span></div>
+      <div class="hero-chips">
+        <span class="chip key"><span class="dot"></span>cybersécurité</span>
+        <span class="chip">réseau &amp; infra</span>
+        <span class="chip">eJPT · eCPPTv2 · CRTO</span>
+      </div>
+      <div class="hero-cta">
+        <a class="btn btn-fill" href="#projects">Voir mes projets <span class="arr">→</span></a>
+        <a class="btn btn-ghost" href="#contact">Contact</a>
+      </div>
     </div>
-    <a id="projectAnchor"></a>
-
-    <div class="about">
-        <div class="subTitle">
-            <div class="container">
-                <div class="titreProject"></div>
-            </div>
-        </div>
-
-        <!-- just to make scrolling effect possible -->
-        <div class="portfolio-body">
-            <div class="portfolio-card">
-                <img class="img-t" src="./assets/botvsai.png" alt="">
-                <h3><br />BotvsAI : BotDiscord en NodeJS</h3>
-            </div>
-            <div class="portfolio-card stegosaurus">
-                <img class="img-t" src="./assets/stegosaurus.png" data-location="./projects/Stegosaurus/index.html" alt="">
-                <h3>Stegosaurus Neuroévolution : Reprise du jeu de Google, piloté par Neuroévolution</h3>
-            </div>
-            <div class="portfolio-card monopong">
-                <img class="img-t" src="./assets/pong.png" data-location="./projects/Neuroevolution1/index.html" alt="">
-                <h3>Monopong Neuroévolution : Un pong pour un seul joueur piloté par Neuroévolution</h3>
-            </div>
-            <div class="portfolio-card">
-                <img class="img-t" src="./assets/portalrunner.png" alt="">
-                <h3>Portal Runner : Notre premier jeu en C avec la librairie Allegro à 3</h3>
-            </div>
-            <div class="portfolio-card oteq">
-                <img class="img-t" src="./assets/orateur.png" alt="">
-                <h3>Orateur Typographique : Site ayant pour but de retranscrire la tonalité de la voix à l'écrit (Chrome
-                    uniquement)</h3>
-            </div>
-            <div class="portfolio-card">
-                <img class="img-t" src="./assets/tictec.png"  alt="">
-                <h3><br />Le TicTec perdu : Un jeu Unity en C# à 2</h3>
-            </div>
-            <div class="portfolio-card" style="border:none;">
-            </div>
-            <div class="portfolio-card dataviz">
-                <img class="img-t" src="./assets/dataviz.png"  alt="">
-                <h3><br />Dashboard météo : visualisation de la météo de différentes stations</h3>
-            </div>
-
-
-        </div>
+    <div class="terminal box" id="termCard">
+      <i class="bracket t"></i><i class="bracket b"></i>
+      <div class="term-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="ttl">terminal</span></div>
+      <div class="term-body" id="termBody"></div>
     </div>
+  </div>
+  <div class="scroll-hint">scroll<span class="chev"></span></div>
+</section>
 
-    <a id="contactAnchor"></a>
+<!-- MARQUEE -->
+<div class="marquee" aria-hidden="true"><canvas id="mq"></canvas></div>
 
+<!-- ABOUT -->
+<section class="about" id="about">
+  <div class="sec-bg bg-about"></div><div class="sec-shade"></div>
+  <div class="section-tag r"><span class="sc">À propos</span></div>
+  <div class="section-title r"><span class="sc">Qui suis-je ?</span></div>
+  <div class="about-inner">
+    <div class="about-text r">
+      <p class="lead">Robin ZMUDA, 25 ans. Développeur <strong>cybersécurité</strong> chez <strong>Knock-Knock</strong>. Je touche à divers domaines pouvant me plaire mais je me spécialise dans la cybersécurité.</p>
+      <p>J'ai appris à programmer avec des programmes en C puis en HTML/CSS et Javascript à travers des petits exercices basiques d'algorithmie. Après ma première année j'ai voulu me lancer dans un projet un peu plus massif et j'ai donc programmé mon propre bot <strong>Discord</strong> et lancé plusieurs projets dans différents domaines que ce soit dans le web avec des libraires comme <strong>ThreeJS</strong> ou dans le scripting <strong>Python</strong>.</p>
+      <p>Je suis aussi un fan de réseau avec plusieurs projets à mon actif comme la création d'un <strong>cyberrange</strong> customisé, la reproduction d'infrastructures typées entreprise ainsi que la manipulation de paquets réseaux pour des buts divers et variés.</p>
+      <p>Enfin, pour revenir dans le monde de la cybersécurité, j'ai eu une période <strong>RootMe</strong> pendant mes études puis j'ai passé plusieurs certifications (<strong>eJPT</strong>, <strong>eCPPTv2</strong>, <strong>CRTO</strong> en cours). J'aime bien me balader sur différents outils ou solutions sur <strong>GitHub</strong> et potentiellement contribuer quand je trouve des bugs et/ou améliorations :)</p>
+    </div>
+    <div class="about-cards">
+      <article class="acard box r"><i class="bracket t"></i><i class="bracket b"></i><span class="ico f1"><svg viewBox="0 0 24 24"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"><animate attributeName="opacity" values="1;.4;1" dur="2.4s" repeatCount="indefinite"/></path></svg></span><h4>Formation</h4><ul><li>Bachelor Concepteur de Systèmes d'Informations — Cs2i Bourgogne (alternance Némésis Studio)</li><li>Diplôme d'Expert Cybersécurité — Bordeaux Ynov Campus</li></ul></article>
+      <article class="acard box r" style="transition-delay:.06s"><i class="bracket t"></i><i class="bracket b"></i><span class="ico"><svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h6a4 4 0 0 0 0-8H9a4 4 0 0 1 0-8h7"/><circle r="1.8" fill="currentColor" stroke="none"><animateMotion dur="3.4s" repeatCount="indefinite" path="M8 19h6a4 4 0 0 0 0-8H9a4 4 0 0 1 0-8h7"/></circle></svg></span><h4>Parcours</h4><ul><li>C → HTML/CSS/JS → bot Discord → ThreeJS → Python</li><li>Projets web, scripting, neuroévolution</li></ul></article>
+      <article class="acard box r" style="transition-delay:.12s"><i class="bracket t"></i><i class="bracket b"></i><span class="ico fi"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="19" r="2.2"/><circle cx="19" cy="19" r="2.2"/><path d="M12 7.2 6.6 17M12 7.2l5.4 9.8"/><circle cx="12" cy="5" r=".9" fill="currentColor" stroke="none"><animate attributeName="opacity" values="1;.2;1" dur="1.8s" repeatCount="indefinite"/></circle><circle cx="5" cy="19" r=".9" fill="currentColor" stroke="none"><animate attributeName="opacity" values=".2;1;.2" dur="1.8s" repeatCount="indefinite" begin=".6s"/></circle><circle cx="19" cy="19" r=".9" fill="currentColor" stroke="none"><animate attributeName="opacity" values=".2;1;.2" dur="1.8s" repeatCount="indefinite" begin="1.2s"/></circle></svg></span><h4>Réseau</h4><ul><li>Cyberrange customisé</li><li>Infrastructures entreprise</li><li>Paquets réseaux</li></ul></article>
+      <article class="acard box r" style="transition-delay:.18s"><i class="bracket t"></i><i class="bracket b"></i><span class="ico f4"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.5 8 11 4.6-1.5 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"><animate attributeName="stroke-dasharray" values="0 8;6 2" dur="2.8s" repeatCount="indefinite"/></path></svg></span><h4>Certifications</h4><ul><li>eJPT · eCPPTv2</li><li>CRTO (en cours)</li><li>RootMe</li></ul></article>
+    </div>
+  </div>
+</section>
 
-    <div class="myLife">
-        <div class="subTitle">
-            <div class="container">
-                <div class="titreContact"></div>
-            </div>
-        </div>
+<!-- SKILLS -->
+<section class="skills-section" id="skills">
+  <div class="sec-bg bg-skills"></div><div class="sec-shade"></div>
+  <div class="section-tag r"><span class="sc">Compétences</span></div>
+  <div class="section-title r"><span class="sc">Ce que je manie</span></div>
+  <div class="skills-grid" id="skillsGrid"></div>
+</section>
 
-        <div class="portfolio-body-res">
-            <div class="portfolio-card-res twitter" data-location="https://twitter.com/RobineEtBatman">
-                <img class="img-t-res" src="./assets/twitter.png" alt="">
-                <h3>Twitter</h3>
-            </div>
-            <div class="portfolio-card-res linkedin" data-location="https://www.linkedin.com/in/robin-zmuda-bb5288200/">
-                <img class="img-t-res" src="./assets/lk.png" alt="">
-                <h3>LinkedIn</h3>
-            </div>
-            <div class="portfolio-card-res rootme"
-                data-location="https://www.root-me.org/Iced?lang=fr#23374ededbc440a52699097304859043">
-                <img class="img-t-res" src="./assets/Root-Me.png" alt="">
-                <h3>RootMe</h3>
-            </div>
-            <div class="portfolio-card-res github" data-location="https://github.com/Anhydrite">
-                <img class="img-t-res" src="./assets/github.png" alt="">
-                <h3>Github</h3>
-            </div>
-            <div class="portfolio-card-res">
-                <img class="img-t-res" src="./assets/discord.png" alt="">
-                <h3>Discord : Anhydrite#8817</h3>
-            </div>
+<!-- PROJECTS -->
+<section class="projects" id="projects">
+  <div class="sec-bg bg-projects"></div><div class="sec-shade"></div>
+  <div class="section-tag r"><span class="sc">Mes projets</span></div>
+  <div class="section-title r"><span class="sc">Sélection de travaux</span></div>
+  <div class="proj-grid" id="projGrid"></div>
+  <div class="proj-cta r"><a href="https://github.com/Anhydrite" target="_blank" rel="noopener">Tous mes projets sur GitHub <span class="arr">→</span></a></div>
+</section>
 
-            <div class="portfolio-card-res">
-                <div class="resContainer">
-                    <img class="img-t-res" src="./assets/mailt.png" alt="">
-                    <h3>contact@robinzmuda.fr</h3>
-                </div>
-            </div>
+<!-- CONTACT -->
+<section class="contact" id="contact">
+  <div class="sec-bg bg-contact"></div><div class="sec-shade"></div>
+  <div class="section-tag r"><span class="sc">Contact</span></div>
+  <div class="section-title r"><span class="sc">Mes réseaux</span></div>
+  <div class="contact-grid" id="socGrid"></div>
+</section>
 
-        </div>
-       
+<footer class="footer">© <b>Robin ZMUDA</b> — Développeur &amp; expert cybersécurité <span style="color:var(--crimson)">_</span></footer>
 
-        <footer class="footer">
-            <span class="textFooter">
-                Conception par Robin ZMUDA inspirée de projets <a class="textFooter"
-                    href="https://codepen.io">Codepen</a>
-            </span>
-        </footer>
-        <!-- Jquery needed -->
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
-        <script src="https://rendro.github.io/easy-pie-chart/javascripts/jquery.easy-pie-chart.js"></script>
-
-        <!-- Function used to shrink nav bar removing paddings and adding black background -->
-        <script>
-
-        </script>
-        <!-- partial -->
-        <script src="./script.js"></script>
-
-        
+<script src="./script.js"></script>
 </body>
-
-
 </html>
