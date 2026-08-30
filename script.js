@@ -2,14 +2,44 @@
    Portfolio Robin ZMUDA — refonte glacier + cramoisi
    ============================================================ */
 
-/* ---- Dock active state ---- */
-const dockLinks=[...document.querySelectorAll('.dock a')];
-const sections=document.querySelectorAll('section[id]');
-const obsNav=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){dockLinks.forEach(l=>l.classList.remove('active'));const l=dockLinks.find(l=>l.getAttribute('href')==='#'+e.target.id);if(l)l.classList.add('active');}});},{threshold:.3});
-sections.forEach(s=>obsNav.observe(s));
+const REDUCED_MOTION=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/* ---- Progress bar ---- */
-window.addEventListener('scroll',()=>{const h=document.documentElement.scrollHeight-window.innerHeight;document.getElementById('prog').style.width=(h>0?(window.scrollY/h*100):0)+'%';},{passive:true});
+/* ---- Navigation et progression : un seul passage par frame ---- */
+const dockLinks=[...document.querySelectorAll('.dock a')];
+const sections=[...document.querySelectorAll('section[id]')];
+const rail=document.querySelector('.scroll-rail');
+const railDot=rail?.querySelector('.scroll-rail-dot');
+const railLabel=rail?.querySelector('.scroll-rail-label');
+const prog=document.getElementById('prog');
+const sectionLabels={hero:'01 · ACCUEIL',about:'02 · À PROPOS',skills:'03 · COMPÉTENCES',projects:'04 · PROJETS',contact:'05 · CONTACT'};
+const sectionPositions=sections.map(section=>({section,top:section.offsetTop}));
+let activeSection=null,scrollFrame=0;
+function activateSection(section){
+  if(!section||section===activeSection)return;
+  activeSection=section;
+  sections.forEach(s=>s.classList.toggle('section-live',s===section));
+  dockLinks.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+section.id));
+  const index=Math.max(0,sections.indexOf(section));
+  if(railDot){railDot.style.top=`${index/(Math.max(1,sections.length-1))*123}px`;railDot.style.background=section.id==='projects'?'var(--crimson)':'var(--bcyan)';}
+  if(railLabel)railLabel.textContent=sectionLabels[section.id]||section.id;
+}
+function updateScrollState(){
+  const max=document.documentElement.scrollHeight-window.innerHeight;
+  const progress=max>0?window.scrollY/max:0;
+  if(prog)prog.style.transform=`scaleX(${progress})`;
+  const marker=window.scrollY+window.innerHeight*.42;
+  let current=sectionPositions[0]?.section;
+  sectionPositions.forEach(({section,top})=>{if(marker>=top)current=section;});
+  activateSection(current);
+}
+function scheduleScrollState(){
+  if(scrollFrame)return;
+  scrollFrame=requestAnimationFrame(()=>{scrollFrame=0;updateScrollState();});
+}
+if(sections[0])activateSection(sections[0]);
+window.addEventListener('scroll',scheduleScrollState,{passive:true});
+window.addEventListener('resize',()=>{sectionPositions.forEach(item=>{item.top=item.section.offsetTop;});scheduleScrollState();},{passive:true});
+updateScrollState();
 
 /* ---- Signature "Robin" (canvas calligraphique) ---- */
 const sigC=document.getElementById('sig'),sigCtx=sigC.getContext('2d'),DPR=Math.min(devicePixelRatio||1,2);
@@ -28,8 +58,9 @@ async function initSig(){
     txt.split('').forEach(c=>L.push({c,x:0,y,wd:sigCtx.measureText(c).width}));
     let x=(w-L.reduce((a,l)=>a+l.wd+gap,0)+gap)/2;
     L.forEach(l=>{l.x=x;x+=l.wd+gap;});
-    let li=0,brush=600;
     sigCtx.lineWidth=2;sigCtx.lineCap='round';sigCtx.strokeStyle='#ffffff';
+    if(REDUCED_MOTION){sigCtx.setLineDash([]);L.forEach(l=>sigCtx.strokeText(l.c,l.x,l.y));return;}
+    let li=0,brush=600;
     (function go(){
       const L2=L[li];
       sigCtx.setLineDash([brush,brush-6]);
@@ -38,8 +69,7 @@ async function initSig(){
       brush-=6;
       if(brush>0){requestAnimationFrame(go);}
       else{sigCtx.setLineDash([]);sigCtx.clearRect(L2.x-4,L2.y-150,L2.wd+8,170);sigCtx.strokeText(L2.c,L2.x,L2.y);
-        li++;if(li<L.length){brush=600;requestAnimationFrame(go);}
-        else setTimeout(()=>{if(active){sizeSig();draw();}},7000);}
+        li++;if(li<L.length){brush=600;requestAnimationFrame(go);}}
     })();
   }
   const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting&&!active){active=true;io.disconnect();draw();}});},{threshold:.3});
@@ -51,6 +81,7 @@ initSig();
 const phrases=['Expert et développeur cybersécurité','Cybersécurité · réseau · automatisation'];
 const typeEl=document.getElementById('typeText');let p=0,ch=0,del=false;
 (function tick(){
+  if(REDUCED_MOTION){typeEl.textContent=phrases[0];return;}
   const cur=phrases[p];typeEl.textContent=cur.slice(0,ch);
   if(!del){if(ch<cur.length){ch++;setTimeout(tick,46);}else{del=true;setTimeout(tick,2600);}}
   else{if(ch>0){ch--;setTimeout(tick,18);}else{del=false;p=(p+1)%phrases.length;setTimeout(tick,600);}}
@@ -64,7 +95,9 @@ const tLines=[
   {p:'$ status',out:'OK · dispo pour de nouveaux projets',cls:'ok'}
 ];
 const tBody=document.getElementById('termBody');let tL=0,tC=0,tP='p';
+if(REDUCED_MOTION)tBody.innerHTML=tLines.map(l=>`<span class="p">${l.p}</span>\n<span class="${l.cls}">${l.out}</span>`).join('\n');
 (function tTick(){
+  if(REDUCED_MOTION)return;
   const l=tLines[tL];
   if(tP==='p'){tBody.innerHTML='<span class="p">'+l.p.slice(0,tC+1)+'</span><span class="cb">|</span>';
     if(tC+1<l.p.length){tC++;setTimeout(tTick,40);}else{tP='o';tC=0;setTimeout(tTick,300);}}
@@ -76,7 +109,7 @@ const tBody=document.getElementById('termBody');let tL=0,tC=0,tP='p';
 /* ---- Compétences (domaines + tags) ---- */
 const domains=[
   {ico:'<svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><rect x="12.4" y="8.6" width="2" height="6.8" fill="currentColor" stroke="none"><animate attributeName="opacity" values="1;0;1" dur="1.1s" repeatCount="indefinite"/></rect></svg>',nm:'Langages',tags:['Python','C','C#','JavaScript','TypeScript','HTML5','CSS3','PHP','Shell']},
-  {ico:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="7s" repeatCount="indefinite"/></ellipse></svg>',nm:'Web',tags:['NodeJS','jQuery','ThreeJS','d3.js']},
+  {ico:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="7s" repeatCount="indefinite"/></ellipse></svg>',nm:'Web',tags:['NodeJS','jQuery','Canvas 2D','d3.js']},
   {ico:'<svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.5 8 11 4.6-1.5 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>',ac:'#d42a54',nm:'Sécurité',tags:['RootMe','eJPT','eCPPTv2','CRTO']},
   {ico:'<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="19" r="2.2"/><circle cx="19" cy="19" r="2.2"/><path d="M12 7.2 6.6 17M12 7.2l5.4 9.8"/><circle cx="12" cy="5" r=".9" fill="currentColor" stroke="none"><animate attributeName="opacity" values="1;.2;1" dur="1.8s" repeatCount="indefinite"/></circle><circle cx="5" cy="19" r=".9" fill="currentColor" stroke="none"><animate attributeName="opacity" values=".2;1;.2" dur="1.8s" repeatCount="indefinite" begin=".6s"/></circle><circle cx="19" cy="19" r=".9" fill="currentColor" stroke="none"><animate attributeName="opacity" values=".2;1;.2" dur="1.8s" repeatCount="indefinite" begin="1.2s"/></circle></svg>',nm:'Réseau',tags:['Cyberrange','Infra entreprise','Paquets']},
   {ico:'<svg viewBox="0 0 24 24"><path d="M7 6h10a5 5 0 0 1 5 5v4a4 4 0 0 1-7.3 2.3L13.5 16h-3l-1.2 1.3A4 4 0 0 1 2 15v-4a5 5 0 0 1 5-5z"/><path d="M6 12h4M8 10v4"/><circle cx="16" cy="11.5" r=".7" fill="currentColor" stroke="none"><animate attributeName="opacity" values="1;.15;1" dur="1.5s" repeatCount="indefinite"/></circle><circle cx="18.2" cy="13.8" r=".7" fill="currentColor" stroke="none"><animate attributeName="opacity" values=".15;1;.15" dur="1.5s" repeatCount="indefinite" begin=".75s"/></circle></svg>',nm:'Jeux',tags:['Unity','Allegro','Neuroévolution']}
@@ -136,61 +169,11 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       else if(s.frame>=start){o+=`<span class="dud">${s.qchars[Math.floor(Math.random()*s.qchars.length)]}</span>`;}
       else o+=from;}
     s.el.innerHTML=o;
-    if(c===s.queue.length){s.timer=setTimeout(()=>setText(s),4200);}
+    if(c===s.queue.length){s.running=false;}
     else s.raf=requestAnimationFrame(()=>{s.frame++;upd(s);});
   }
   const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){const s=st.find(x=>x.el===e.target);if(s&&!s.running){s.running=true;setText(s);}io.unobserve(e.target);}});},{threshold:.5});
   st.forEach(s=>io.observe(s.el));
 })();
 
-/* ---- Particles ---- */
-const pc=document.getElementById('particles');
-for(let i=0;i<35;i++){
-  const d=document.createElement('span');d.className='pt';
-  const s=(Math.random()*2.5+1).toFixed(1);
-  d.style.cssText=`background:${['rgba(147,197,253,.6)','rgba(140,205,218,.5)','rgba(171,188,208,.4)','rgba(93,159,201,.5)'][i%4]};width:${s}px;height:${s}px;left:${Math.random()*100}%;top:${Math.random()*97}%;animation:rise ${(Math.random()*10+8).toFixed(1)}s linear ${(Math.random()*8).toFixed(1)}s infinite`;
-  pc.appendChild(d);
-}
-
-/* ---- 3D tilt cartes projets ---- */
-document.querySelectorAll('.pcard').forEach(c=>{
-  c.addEventListener('mousemove',e=>{
-    const r=c.getBoundingClientRect();
-    const x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
-    c.style.transform=`perspective(800px) rotateY(${x*8}deg) rotateX(${y*-8}deg) translateY(-4px)`;
-  });
-  c.addEventListener('mouseleave',()=>{c.style.transform='';});
-});
-
-/* ---- Marquee canvas ---- */
-const mqc=document.getElementById('mq');
-if(mqc){
-  const mctx=mqc.getContext('2d');
-  const mwords=['cybersécurité','pentest','rootme','cyberrange','neuroévolution','python','nodejs','eCPPTv2','crto','web','réseau','dataviz','gamedev','unity','typescript','c#','go','scraping','algorithmique','infra'];
-  let mw=0,mh=0,moff=0,lastT=0;
-  const MDPR=Math.min(devicePixelRatio||1,2);
-  function sizeMq(){mw=mqc.clientWidth;mh=mqc.clientHeight;mqc.width=mw*MDPR;mqc.height=mh*MDPR;mctx.setTransform(MDPR,0,0,MDPR,0,0);}
-  sizeMq();
-  window.addEventListener('resize',sizeMq);
-  const cols=['#93a9c8','#d42a54'];
-  function drawMq(t){
-    if(!lastT)lastT=t;
-    const dt=Math.min((t-lastT)/1000,.05);lastT=t;
-    moff+=dt*46;
-    mctx.clearRect(0,0,mw,mh);
-    const fs=Math.min(13,mh*.62);
-    mctx.font=`600 ${fs}px "JetBrains Mono",monospace`;
-    mctx.textBaseline='middle';
-    const sep='  ●  ';
-    const items=[];
-    mwords.forEach((w)=>{items.push({t:w,c:cols[0]});items.push({t:sep,c:cols[1]});});
-    const total=items.reduce((a,it)=>a+mctx.measureText(it.t).width,0);
-    moff%=Math.max(total,1);
-    let xx=-moff,idx=0;
-    while(xx<mw){const it=items[idx%items.length];const wd=mctx.measureText(it.t).width;mctx.fillStyle=it.c;mctx.fillText(it.t,xx,mh/2);xx+=wd;idx++;}
-    xx+=total;
-    while(xx<mw){const it=items[idx%items.length];const wd=mctx.measureText(it.t).width;mctx.fillStyle=it.c;mctx.fillText(it.t,xx,mh/2);xx+=wd;idx++;}
-    requestAnimationFrame(drawMq);
-  }
-  requestAnimationFrame(drawMq);
-}
+/* Les cartes restent volontairement plates : aucun calcul de perspective au survol. */
