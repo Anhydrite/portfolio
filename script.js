@@ -4,6 +4,16 @@
 
 const REDUCED_MOTION=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/* ---- Marque de compétences (générée en JS : deux moitiés strictement identiques) ---- */
+(function(){
+  const words=['cybersécurité','pentest','rootme','cyberrange','neuroévolution','python','nodejs','eCPPTv2','crto','web','réseau','dataviz','gamedev','unity','typescript','c#','go','scraping','algorithmique','infra'];
+  const track=document.getElementById('mqTrack');
+  if(!track)return;
+  const sep='&nbsp;&nbsp;●&nbsp;&nbsp;';
+  const half=words.map(w=>'<span>'+w+'</span>'+sep).join('');
+  track.innerHTML=half+half;
+})();
+
 /* ---- Navigation et progression : un seul passage par frame ---- */
 const dockLinks=[...document.querySelectorAll('.dock a')];
 const sections=[...document.querySelectorAll('section[id]')];
@@ -39,6 +49,12 @@ function scheduleScrollState(){
 if(sections[0])activateSection(sections[0]);
 window.addEventListener('scroll',scheduleScrollState,{passive:true});
 window.addEventListener('resize',()=>{sectionPositions.forEach(item=>{item.top=item.section.offsetTop;});scheduleScrollState();},{passive:true});
+/* Recalcule après chargement des polices/ressources : les hauteurs bougent, la spy doit suivre. */
+(function(){
+  function remeasure(){sectionPositions.forEach(item=>{item.top=item.section.offsetTop;});scheduleScrollState();}
+  window.addEventListener('load',remeasure,{passive:true});
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(remeasure);
+})();
 updateScrollState();
 
 /* ---- Signature "Robin" (canvas calligraphique) ---- */
@@ -157,6 +173,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const els=[...document.querySelectorAll('.sc')];
   const st=els.map(el=>({el,txt:el.textContent,running:false,frame:0,raf:0,timer:0,qchars:chars.split(''),queue:[]}));
   function setText(s){
+    if(REDUCED_MOTION){s.el.textContent=s.txt;return;}
     const t0=s.el.innerText||s.txt;const len=Math.max(t0.length,s.txt.length);
     s.queue=[];
     for(let i=0;i<len;i++){s.queue.push({from:t0[i]||'',to:s.txt[i]||'',start:Math.floor(Math.random()*40),end:0});s.queue[i].end=s.queue[i].start+Math.floor(Math.random()*40);}

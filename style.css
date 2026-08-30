@@ -34,11 +34,38 @@ body{margin:0;color:var(--txt);font-family:var(--sans);background:var(--bg);line
 ::selection{background:rgba(93,159,201,.3)}
 a{color:inherit;text-decoration:none}
 
-/* ---- FOND 2D : dégradés statiques, sans canvas ni composition GPU ---- */
-body{background:radial-gradient(circle at 15% 10%,rgba(77,210,238,.09),transparent 34rem),radial-gradient(circle at 88% 30%,rgba(212,42,84,.08),transparent 32rem),var(--bg)}
+/* ---- FOND LAVE 2D : blobs animés (CSS pur, sans WebGL ni canvas) ---- */
+.bg-lava{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;isolation:isolate}
+.blob{position:absolute;border-radius:50%;will-change:transform;mix-blend-mode:screen;
+  background:radial-gradient(circle at 50% 50%,rgba(140,205,218,.78),transparent 62%)}
+.b1{width:64vmax;height:64vmax;left:-16vmax;top:-18vmax;animation:lavaDrift1 34s ease-in-out infinite alternate}
+.b2{width:58vmax;height:58vmax;right:4vw;top:0vh;background:radial-gradient(circle at 50% 50%,rgba(212,42,84,.6),transparent 62%);animation:lavaDrift2 41s ease-in-out infinite alternate}
+.b3{width:62vmax;height:62vmax;left:8vw;bottom:-20vmax;background:radial-gradient(circle at 50% 50%,rgba(77,210,238,.64),transparent 62%);animation:lavaDrift3 29s ease-in-out infinite alternate}
+.b4{width:56vmax;height:56vmax;right:6vw;bottom:-14vmax;background:radial-gradient(circle at 50% 50%,rgba(247,131,172,.56),transparent 64%);animation:lavaDrift4 37s ease-in-out infinite alternate}
+.b5{width:60vmax;height:60vmax;left:26vw;top:32vh;background:radial-gradient(circle at 50% 50%,rgba(61,110,165,.68),transparent 62%);animation:lavaDrift2 44s ease-in-out infinite alternate-reverse}
+.b6{width:54vmax;height:54vmax;right:26vw;top:58vh;background:radial-gradient(circle at 50% 50%,rgba(93,159,201,.58),transparent 64%);animation:lavaDrift1 31s ease-in-out infinite alternate-reverse}
+@keyframes lavaDrift1{
+  0%{transform:translate3d(0,0,0) scale(1);border-radius:50%}
+  50%{transform:translate3d(10vw,9vh,0) scale(1.14);border-radius:46% 54% 58% 42%/52% 46% 54% 48%}
+  100%{transform:translate3d(-7vw,13vh,0) scale(.92);border-radius:58% 42% 46% 54%/44% 56% 44% 56%}}
+@keyframes lavaDrift2{
+  0%{transform:translate3d(0,0,0) scale(1);border-radius:50%}
+  50%{transform:translate3d(-9vw,-7vh,0) scale(.92);border-radius:56% 44% 48% 52%/46% 54% 48% 52%}
+  100%{transform:translate3d(7vw,-13vh,0) scale(1.2);border-radius:44% 56% 54% 46%/58% 42% 56% 44%}}
+@keyframes lavaDrift3{
+  0%{transform:translate3d(0,0,0) scale(1);border-radius:50%}
+  50%{transform:translate3d(-9vw,10vh,0) scale(1.12);border-radius:52% 48% 44% 56%/48% 52% 46% 54%}
+  100%{transform:translate3d(10vw,-8vh,0) scale(.94);border-radius:46% 54% 56% 44%/54% 46% 52% 48%}}
+@keyframes lavaDrift4{
+  0%{transform:translate3d(0,0,0) scale(1);border-radius:50%}
+  50%{transform:translate3d(11vw,9vh,0) scale(1.1);border-radius:58% 42% 50% 50%/44% 56% 58% 42%}
+  100%{transform:translate3d(-7vw,-10vh,0) scale(1.16);border-radius:42% 58% 52% 48%/56% 44% 42% 58%}}
+@media (prefers-reduced-motion: reduce){
+  .blob{animation:none}
+}
 
 /* ---- DOCK NAV ---- */
-.dock{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:100;display:flex;gap:6px;padding:10px 16px;background:rgba(8,18,33,.96);border:1px solid var(--line);border-radius:20px;box-shadow:0 20px 50px -20px rgba(0,0,0,.6)}
+.dock{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:100;display:flex;gap:6px;padding:10px 16px;background:rgba(8,18,33,.88);border:1px solid var(--line);border-radius:20px;box-shadow:0 20px 50px -20px rgba(0,0,0,.6);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .dock a{padding:8px 14px;border-radius:12px;font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);transition:background-color .25s,color .25s;white-space:nowrap}
 @media(max-width:600px){.dock{width:calc(100% - 24px);padding:7px 8px;gap:2px;justify-content:space-between}.dock a{padding:8px 7px;font-size:.58rem;letter-spacing:.03em}}
 .dock a:hover,.dock a.active{color:var(--txt);background:rgba(93,159,201,.15)}
@@ -56,7 +83,7 @@ body{background:radial-gradient(circle at 15% 10%,rgba(77,210,238,.09),transpare
 section{scroll-snap-align:start}
 
 /* ---- HERO ---- */
-.hero{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:60px 24px}
+.hero{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:60px 24px 110px}
 .hero-shade{position:absolute;z-index:0;inset:0;background:radial-gradient(ellipse 90% 80% at 50% 40%,rgba(10,23,38,.08),rgba(10,23,38,.30) 64%,rgba(8,18,33,.56) 100%)}
 .hero-grid{position:absolute;z-index:0;inset:0;opacity:.22;background-image:linear-gradient(rgba(100,140,200,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(100,140,200,.08) 1px,transparent 1px);background-size:52px 52px}
 .hero-panel{position:relative;width:min(1200px,100%);padding:0;background:transparent;border:0;box-shadow:none;overflow:visible}
@@ -64,13 +91,12 @@ section{scroll-snap-align:start}
 .hero-content{position:relative;z-index:2;width:100%;display:grid;grid-template-columns:1.2fr .8fr;gap:60px;align-items:center}
 @media(max-width:900px){.hero-content{grid-template-columns:1fr;gap:40px}}
 .hero-content,.hero-left,.hero h1{min-width:0;max-width:100%}
-.hero h1 canvas{width:min(420px,100%)}
-.hero-left{position:relative}
+.hero h1 canvas{display:block;width:min(420px,100%);height:auto}
 .hero-crumb{font-family:var(--mono);font-size:.8rem;color:var(--muted);letter-spacing:.1em;display:flex;align-items:center;gap:10px;margin-bottom:20px}
 .hero-crumb .pulse{width:8px;height:8px;border-radius:50%;background:var(--cyan);animation:pulse 2s ease-in-out infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(140,205,218,.5)}50%{box-shadow:0 0 0 8px rgba(140,205,218,0)}}
 .hero h1{margin:0 0 8px;display:flex;align-items:flex-end;flex-wrap:wrap;gap:8px 24px;line-height:1}
-.hero h1 canvas{display:block;max-width:100%;height:auto}
+.hero-left{position:relative}
 .hero .zmuda{font-size:clamp(2.8rem,8vw,5.8rem);font-weight:700;background:linear-gradient(135deg,#f0f6ff 15%,var(--ice) 45%,var(--cyan) 70%,var(--crimson) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .hero-type{font-family:var(--mono);font-size:clamp(1rem,2.2vw,1.35rem);color:var(--muted);min-height:1.6em;margin-top:4px}
 .hero-type .cur{color:var(--cyan);animation:blink 1s steps(1) infinite}
@@ -109,12 +135,12 @@ section{scroll-snap-align:start}
 
 /* ---- PATINE PHOTOS + PANNEAUX (fond unique, matière discrète) ---- */
 .about,.skills-section,.projects,.contact{position:relative;overflow:hidden;max-width:none;margin:0;padding:64px 22px}
-.sec-bg{position:absolute;inset:0;opacity:1;pointer-events:none;background:radial-gradient(circle at 78% 18%,rgba(77,210,238,.08),transparent 34%),radial-gradient(circle at 18% 72%,rgba(212,42,84,.06),transparent 38%),var(--bg)}
-.sec-bg.bg-about{background-color:#091525}
-.sec-bg.bg-skills{background-color:#0a1828}
-.sec-bg.bg-projects{background-color:#0b1729}
-.sec-bg.bg-contact{background-color:#091525}
-.sec-shade{position:absolute;inset:0;background:linear-gradient(180deg,var(--bg) 0%,rgba(8,18,33,.54) 24%,rgba(8,18,33,.42) 52%,rgba(8,18,33,.62) 80%,var(--bg) 100%);pointer-events:none}
+.sec-bg{position:absolute;inset:0;pointer-events:none;background:transparent}
+.sec-bg.bg-about{background:rgba(9,21,37,.24)}
+.sec-bg.bg-skills{background:rgba(10,24,40,.20)}
+.sec-bg.bg-projects{background:rgba(11,23,41,.18)}
+.sec-bg.bg-contact{background:rgba(9,21,37,.24)}
+.sec-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,18,33,.86) 0%,rgba(8,18,33,.42) 22%,rgba(8,18,33,.32) 50%,rgba(8,18,33,.48) 78%,rgba(8,18,33,.86) 100%);pointer-events:none}
 .section-panel{position:relative;z-index:2;width:min(1200px,100%);margin:0 auto;padding:0;min-width:0}
 .section-panel .section-tag,.section-panel .section-title,.section-panel .about-inner,.section-panel .skills-grid,.section-panel .proj-grid,.section-panel .contact-grid,.section-panel .proj-cta{position:relative;z-index:1}
 .section-tag .pnum{margin-left:auto;color:var(--muted);font-size:.68rem;letter-spacing:.12em;border:1px solid var(--line);padding:4px 8px;border-radius:8px}
