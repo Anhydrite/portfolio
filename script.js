@@ -202,6 +202,8 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   if(!ctx){host.classList.add('is-fallback');return;}
 
   let reduced=motion.matches,raf=0,last=0,time=0,simW=0,simH=0,image;
+  const fpsValue=document.querySelector('#fps-counter strong');
+  let fpsFrames=0,fpsStamp=performance.now();
   const TAU=Math.PI*2,clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
   const blobs=[
     {x:.16,y:.23,r:.105,phase:.2,speed:.16,dx:.11,dy:.15,color:[230,34,86]},
@@ -254,14 +256,28 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     }
     ctx.putImageData(image,0,0);
   }
+  function updateFps(now){
+    if(!fpsValue)return;
+    fpsFrames++;
+    const elapsed=now-fpsStamp;
+    if(elapsed<500)return;
+    const fps=Math.round(fpsFrames*1000/elapsed);
+    fpsValue.textContent=String(fps);
+    fpsValue.dataset.level=fps<30?'low':fps<55?'mid':'good';
+    fpsFrames=0;fpsStamp=now;
+  }
   function frame(now){
     raf=0;if(document.hidden||reduced)return;
     if(last&&now-last<40){raf=requestAnimationFrame(frame);return;}
-    const dt=last?Math.min(.05,(now-last)/1000):.016;last=now;update(dt);render();raf=requestAnimationFrame(frame);
+    const dt=last?Math.min(.05,(now-last)/1000):.016;last=now;update(dt);render();updateFps(now);raf=requestAnimationFrame(frame);
   }
   function stop(){if(raf){cancelAnimationFrame(raf);raf=0;}last=0;}
   function start(){if(!reduced&&!document.hidden&&!raf){last=0;raf=requestAnimationFrame(frame);}}
-  function updateMotion(){reduced=motion.matches;stop();if(!reduced)start();}
+  function updateMotion(){
+    reduced=motion.matches;stop();
+    if(reduced){if(fpsValue)fpsValue.textContent='—';}
+    else{fpsFrames=0;fpsStamp=performance.now();start();}
+  }
 
   try{
     resize();update(.016);render();start();
