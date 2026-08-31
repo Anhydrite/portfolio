@@ -34,7 +34,7 @@ body{margin:0;color:var(--txt);font-family:var(--sans);background:#000;line-heig
 
 /* ---- FOND LAMPE À LAVE : canvas métaballs derrière le contenu ---- */
 #lava-bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:#000;isolation:isolate}
-#lava-canvas{display:block;width:100%;height:100%;opacity:1;contain:strict}
+#lava-canvas{display:block;width:100%;height:100%;opacity:1;contain:strict;transform:translateZ(0);will-change:transform}
 .lava-fallback{display:none;position:absolute;inset:0;background:#02050b}
 #lava-bg.is-fallback #lava-canvas{display:none}
 #lava-bg.is-fallback .lava-fallback{display:block}

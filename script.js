@@ -204,7 +204,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const renderer=rendererInfo?gl.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL):'';
   const softwareRenderer=/swiftshader|llvmpipe|software/i.test(renderer);
 
-  let reduced=motion.matches,raf=0,last=0,time=0,W=0,H=0,DPR=1;
+  let reduced=motion.matches,raf=0,last=0,time=0,W=0,H=0,DPR=1,scrolling=false,scrollTimer=0;
   const fpsValue=document.querySelector('#fps-counter strong');
   let fpsFrames=0,fpsStamp=performance.now();
   const MAX_BLOBS=8,clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
@@ -261,9 +261,14 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
 
   function resize(){
     W=Math.max(1,innerWidth);H=Math.max(1,innerHeight);DPR=Math.min(devicePixelRatio||1,1.25);
-    const quality=softwareRenderer?(innerWidth<600?.5:.34):(innerWidth<600?.8:.75);
+    const base=softwareRenderer?(innerWidth<600?.5:.34):(innerWidth<600?.8:.75);
+    const quality=scrolling?Math.min(.62,base):base;
     canvas.width=Math.max(1,Math.round(W*DPR*quality));canvas.height=Math.max(1,Math.round(H*DPR*quality));
     gl.viewport(0,0,canvas.width,canvas.height);render();
+  }
+  function onScroll(){
+    if(!scrolling){scrolling=true;resize();}
+    clearTimeout(scrollTimer);scrollTimer=setTimeout(()=>{scrolling=false;resize();},180);
   }
   function update(dt){
     time+=Math.min(.05,dt);
@@ -300,6 +305,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();stop();host.classList.add('is-fallback');},{passive:false});
     document.addEventListener('visibilitychange',()=>document.hidden?stop():start(),{passive:true});
     addEventListener('resize',resize,{passive:true});
+    addEventListener('scroll',onScroll,{passive:true});
     if(motion.addEventListener)motion.addEventListener('change',updateMotion);else if(motion.addListener)motion.addListener(updateMotion);
   }catch(error){console.warn('Fond lampe à lave indisponible',error);host.classList.add('is-fallback');stop();}
 })();
