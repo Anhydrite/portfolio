@@ -229,20 +229,27 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const fragmentSource=`#version 300 es
     precision highp float;
     uniform vec2 uResolution;
+    uniform float uTime;
     uniform vec4 uBlobs[${MAX_BLOBS}];
     uniform vec3 uColors[${MAX_BLOBS}];
     out vec4 outColor;
     void main(){
       vec2 uv=gl_FragCoord.xy/uResolution;
       float aspect=uResolution.x/uResolution.y;
-      float field=0.0;vec3 tint=vec3(0.0);
+      vec2 ndc=(uv-0.5)*vec2(aspect,1.0);
+      float parallax=0.16*sin(uTime*0.13)+0.5;
+      vec2 sway=vec2(sin(uTime*0.23),cos(uTime*0.19))*0.045;
+      vec2 center=vec2(0.5,0.5)+sway;
+      float field=0.0;vec3 tint=vec3(0.0);float depth=0.0;float weightSum=0.0;
       for(int i=0;i<${MAX_BLOBS};i++){
-        vec2 delta=(uv-uBlobs[i].xy)*vec2(aspect,1.0);
-        float contribution=(uBlobs[i].z*uBlobs[i].z)/(dot(delta,delta)+0.0007);
-        field+=contribution;tint+=uColors[i]*contribution;
+        vec3 bc=vec3((uBlobs[i].x-0.5)*2.0,(uBlobs[i].y-0.5)*2.0,uBlobs[i].w*1.2);
+        vec2 offset=ndc-(bc.xy-center)*parallax*0.5;
+        float contribution=uBlobs[i].z/(dot(offset,offset)*aspect*aspect+0.004);
+        field+=contribution;tint+=uColors[i]*contribution;depth+=contribution*bc.z;weightSum+=contribution;
       }
-      float body=smoothstep(.82,.94,field);
-      outColor=vec4(tint/max(field,.0001)*body*1.08,1.0);
+      float body=smoothstep(.75,.9,field);
+      float depthShade=0.72+0.28*sin(depth/max(weightSum,.001)*1.9+uTime*0.4);
+      outColor=vec4(tint/max(field,.001)*body*depthShade*1.15,1.0);
     }`;
   function shader(type,source){
     const result=gl.createShader(type);gl.shaderSource(result,source);gl.compileShader(result);
@@ -258,13 +265,14 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
   const position=gl.getAttribLocation(program,'aPosition');
   const resolution=gl.getUniformLocation(program,'uResolution');
+  const timeLocation=gl.getUniformLocation(program,'uTime');
   const blobsLocation=gl.getUniformLocation(program,'uBlobs[0]');
   const colorsLocation=gl.getUniformLocation(program,'uColors[0]');
 
   function resize(){
     W=Math.max(1,innerWidth);H=Math.max(1,innerHeight);DPR=Math.min(devicePixelRatio||1,1.25);
-    const base=softwareRenderer?(innerWidth<600?.5:.34):(innerWidth<600?.8:.75);
-    const quality=scrolling?Math.min(.62,base):base;
+    const base=softwareRenderer?(innerWidth<600?.34:.22):(innerWidth<600?.72:.6);
+    const quality=scrolling?Math.min(.5,base):base;
     canvas.width=Math.max(1,Math.round(W*DPR*quality));canvas.height=Math.max(1,Math.round(H*DPR*quality));
     gl.viewport(0,0,canvas.width,canvas.height);render();
   }
@@ -279,11 +287,12 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       b.cx=clamp(b.x+Math.sin(wave*.83+i)*b.dx,.06,.94);
       b.cy=clamp(b.y+Math.sin(wave+1.7+i*.43)*b.dy,.06,.94);
       b.cr=b.r*(1+.16*Math.sin(wave*1.35+1.2));
+      b.depth=.5+.2*Math.sin(wave*.67+i*.71);
     });
   }
   function render(){
-    blobs.forEach((b,i)=>blobData.set([b.cx||b.x,b.cy||b.y,b.cr||b.r,0],i*4));
-    gl.useProgram(program);gl.uniform2f(resolution,canvas.width,canvas.height);gl.uniform4fv(blobsLocation,blobData);gl.uniform3fv(colorsLocation,colorData);
+    blobs.forEach((b,i)=>blobData.set([b.cx||b.x,b.cy||b.y,b.cr||b.r,b.depth??.5],i*4));
+    gl.useProgram(program);gl.uniform2f(resolution,canvas.width,canvas.height);gl.uniform1f(timeLocation,time);gl.uniform4fv(blobsLocation,blobData);gl.uniform3fv(colorsLocation,colorData);
     gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,3);
   }
   function updateFps(now){
