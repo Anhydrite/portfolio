@@ -269,8 +269,8 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     gl.viewport(0,0,canvas.width,canvas.height);render();
   }
   function onScroll(){
-    if(!scrolling){scrolling=true;stop();document.documentElement.classList.add('is-scrolling');}
-    clearTimeout(scrollTimer);scrollTimer=setTimeout(()=>{scrolling=false;document.documentElement.classList.remove('is-scrolling');start();},180);
+    if(!scrolling){scrolling=true;resize();document.documentElement.classList.add('is-scrolling');}
+    clearTimeout(scrollTimer);scrollTimer=setTimeout(()=>{scrolling=false;document.documentElement.classList.remove('is-scrolling');resize();},180);
   }
   function update(dt){
     time+=Math.min(.05,dt);
