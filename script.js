@@ -243,13 +243,12 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
         field+=contribution;weight+=contribution;
         red+=b.color[0]*contribution;green+=b.color[1]*contribution;blue+=b.color[2]*contribution;
       }
-      const body=clamp((field-.68)/.48),edge=clamp((field-.18)/.62),glow=clamp(field/2.4);
+      const body=field>.92?1:0;
       const tint=weight?1/weight:0;
-      const ambient=2+5*Math.exp(-((x-.18)**2+(y-.18)**2)*7)+4*Math.exp(-((x-.82)**2+(y-.82)**2)*8);
       const idx=(py*simW+px)*4;
-      data[idx]=Math.round(ambient+red*tint*body*1.12+230*edge*.06);
-      data[idx+1]=Math.round(ambient*1.5+green*tint*body*1.05+48*glow*.08);
-      data[idx+2]=Math.round(ambient*2.5+blue*tint*body*1.12+105*edge*.12);
+      data[idx]=Math.round(red*tint*body*1.08);
+      data[idx+1]=Math.round(green*tint*body*1.08);
+      data[idx+2]=Math.round(blue*tint*body*1.08);
       data[idx+3]=255;
     }
     ctx.putImageData(image,0,0);
