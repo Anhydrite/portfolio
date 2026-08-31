@@ -193,4 +193,82 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   st.forEach(s=>io.observe(s.el));
 })();
 
+/* ---- Fond lampe à lave : métaballes Canvas 2D basse résolution ---- */
+(function initLava(){
+  const host=document.getElementById('lava-bg'),canvas=document.getElementById('lava-canvas');
+  if(!host||!canvas)return;
+  const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
+  const ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
+  if(!ctx){host.classList.add('is-fallback');return;}
+
+  let reduced=motion.matches,raf=0,last=0,time=0,simW=0,simH=0,image;
+  const TAU=Math.PI*2,clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+  const blobs=[
+    {x:.16,y:.23,r:.105,phase:.2,speed:.16,dx:.11,dy:.15,color:[230,34,86]},
+    {x:.39,y:.68,r:.12,phase:2.1,speed:.13,dx:.14,dy:.18,color:[52,190,220]},
+    {x:.63,y:.30,r:.09,phase:4.3,speed:.18,dx:.12,dy:.16,color:[212,42,84]},
+    {x:.84,y:.72,r:.115,phase:5.2,speed:.11,dx:.13,dy:.14,color:[91,116,220]},
+    {x:.47,y:.16,r:.075,phase:1.4,speed:.15,dx:.10,dy:.12,color:[247,92,126]},
+    {x:.23,y:.86,r:.085,phase:3.4,speed:.12,dx:.12,dy:.10,color:[54,169,210]},
+    {x:.76,y:.48,r:.07,phase:4.8,speed:.17,dx:.09,dy:.13,color:[185,62,156]},
+    {x:.54,y:.89,r:.065,phase:2.8,speed:.14,dx:.11,dy:.08,color:[224,48,94]}
+  ];
+
+  function resize(){
+    const ratio=Math.max(0.45,Math.min(0.72,innerWidth/1700));
+    simW=Math.max(180,Math.min(420,Math.round(innerWidth*ratio)));
+    simH=Math.max(120,Math.round(simW*innerHeight/Math.max(1,innerWidth)));
+    canvas.width=simW;canvas.height=simH;canvas.style.imageRendering='auto';
+    image=ctx.createImageData(simW,simH);
+    render();
+  }
+  function update(dt){
+    time+=Math.min(.05,dt);
+    blobs.forEach((b,i)=>{
+      const wave=time*b.speed+b.phase;
+      b.cx=clamp(b.x+Math.sin(wave*.83+i)*b.dx,.06,.94);
+      b.cy=clamp(b.y+Math.sin(wave+1.7+i*.43)*b.dy,.06,.94);
+      b.cr=b.r*(1+.16*Math.sin(wave*1.35+1.2));
+    });
+  }
+  function render(){
+    if(!image)return;
+    const data=image.data,aspect=simW/Math.max(1,simH);
+    for(let py=0;py<simH;py++)for(let px=0;px<simW;px++){
+      const x=(px+.5)/simW,y=(py+.5)/simH;
+      let field=0,weight=0,red=0,green=0,blue=0;
+      for(const b of blobs){
+        const dx=(x-b.cx)*aspect,dy=y-b.cy;
+        const d2=dx*dx+dy*dy+0.0007,contribution=(b.cr*b.cr)/d2;
+        field+=contribution;weight+=contribution;
+        red+=b.color[0]*contribution;green+=b.color[1]*contribution;blue+=b.color[2]*contribution;
+      }
+      const body=clamp((field-.68)/.48),edge=clamp((field-.18)/.62),glow=clamp(field/2.4);
+      const tint=weight?1/weight:0;
+      const ambient=2+5*Math.exp(-((x-.18)**2+(y-.18)**2)*7)+4*Math.exp(-((x-.82)**2+(y-.82)**2)*8);
+      const idx=(py*simW+px)*4;
+      data[idx]=Math.round(ambient+red*tint*body*1.12+230*edge*.06);
+      data[idx+1]=Math.round(ambient*1.5+green*tint*body*1.05+48*glow*.08);
+      data[idx+2]=Math.round(ambient*2.5+blue*tint*body*1.12+105*edge*.12);
+      data[idx+3]=255;
+    }
+    ctx.putImageData(image,0,0);
+  }
+  function frame(now){
+    raf=0;if(document.hidden||reduced)return;
+    if(last&&now-last<32){raf=requestAnimationFrame(frame);return;}
+    const dt=last?Math.min(.05,(now-last)/1000):.016;last=now;update(dt);render();raf=requestAnimationFrame(frame);
+  }
+  function stop(){if(raf){cancelAnimationFrame(raf);raf=0;}last=0;}
+  function start(){if(!reduced&&!document.hidden&&!raf){last=0;raf=requestAnimationFrame(frame);}}
+  function updateMotion(){reduced=motion.matches;stop();if(!reduced)start();}
+
+  try{
+    resize();update(.016);render();start();
+    document.addEventListener('visibilitychange',()=>document.hidden?stop():start(),{passive:true});
+    addEventListener('resize',resize,{passive:true});
+    if(motion.addEventListener)motion.addEventListener('change',updateMotion);else if(motion.addListener)motion.addListener(updateMotion);
+  }catch(error){console.warn('Fond lampe à lave indisponible',error);host.classList.add('is-fallback');stop();}
+})();
+
 /* Les cartes restent volontairement plates : aucun calcul de perspective au survol. */
