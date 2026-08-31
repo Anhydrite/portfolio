@@ -200,7 +200,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const host=document.getElementById('lava-bg'),canvas=document.getElementById('lava-canvas');
   if(!host||!canvas)return;
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
-  const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,stencil:false,powerPreference:'high-performance'});
+  const gl=canvas.getContext('webgl2',{alpha:false,antialias:true,depth:false,stencil:false,powerPreference:'high-performance'});
   if(!gl){host.classList.add('is-fallback');return;}
   const rendererInfo=gl.getExtension('WEBGL_debug_renderer_info');
   const renderer=rendererInfo?gl.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL):'';
@@ -211,17 +211,18 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   let fpsFrames=0,fpsStamp=performance.now();
   const MAX_BLOBS=8,clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
   const blobs=[
-    {x:.16,y:.23,r:.105,phase:.2,speed:.16,dx:.11,dy:.15,color:[.90,.08,.26]},
-    {x:.39,y:.68,r:.12,phase:2.1,speed:.13,dx:.14,dy:.18,color:[.16,.72,.84]},
-    {x:.63,y:.30,r:.09,phase:4.3,speed:.18,dx:.12,dy:.16,color:[.84,.08,.22]},
-    {x:.84,y:.72,r:.115,phase:5.2,speed:.11,dx:.13,dy:.14,color:[.36,.46,.86]},
-    {x:.47,y:.16,r:.075,phase:1.4,speed:.15,dx:.10,dy:.12,color:[.96,.22,.42]},
-    {x:.23,y:.86,r:.085,phase:3.4,speed:.12,dx:.12,dy:.10,color:[.16,.64,.80]},
-    {x:.76,y:.48,r:.07,phase:4.8,speed:.17,dx:.09,dy:.13,color:[.72,.18,.60]},
-    {x:.54,y:.89,r:.065,phase:2.8,speed:.14,dx:.11,dy:.08,color:[.88,.10,.28]}
+    {x:.2,y:.3,r:.12,vx:.022,vy:.018,color:[.95,.32,.08],base:[.95,.32,.08]},
+    {x:.42,y:.7,r:.14,vx:-.02,vy:.025,color:[1.0,.55,.12],base:[1.0,.55,.12]},
+    {x:.66,y:.28,r:.11,vx:.018,vy:-.022,color:[.85,.12,.05],base:[.85,.12,.05]},
+    {x:.82,y:.65,r:.13,vx:-.017,vy:-.019,color:[1.0,.68,.25],base:[1.0,.68,.25]},
+    {x:.5,y:.15,r:.1,vx:.024,vy:.016,color:[1.0,.42,.10],base:[1.0,.42,.10]},
+    {x:.28,y:.85,r:.11,vx:.019,vy:-.024,color:[.98,.62,.18],base:[.98,.62,.18]},
+    {x:.78,y:.45,r:.14,vx:-.026,vy:.021,color:[.30,.38,.85],base:[.30,.38,.85]},
+    {x:.58,y:.88,r:.13,vx:-.021,vy:-.017,color:[.62,.30,.88],base:[.62,.30,.88]}
   ];
   const blobData=new Float32Array(MAX_BLOBS*4),colorData=new Float32Array(MAX_BLOBS*3);
   blobs.forEach((b,i)=>colorData.set(b.color,i*3));
+  function lerp3(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
 
   const vertexSource=`#version 300 es
     in vec2 aPosition;
@@ -237,19 +238,26 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       vec2 uv=gl_FragCoord.xy/uResolution;
       float aspect=uResolution.x/uResolution.y;
       vec2 ndc=(uv-0.5)*vec2(aspect,1.0);
-      float parallax=0.16*sin(uTime*0.13)+0.5;
-      vec2 sway=vec2(sin(uTime*0.23),cos(uTime*0.19))*0.045;
-      vec2 center=vec2(0.5,0.5)+sway;
-      float field=0.0;vec3 tint=vec3(0.0);float depth=0.0;float weightSum=0.0;
+      // Espace monde isotrope : diviser l'axe X pour garder des formes rondes
+      vec2 p=vec2(ndc.x/aspect,ndc.y);
+      float field=0.0;vec3 tint=vec3(0.0);
       for(int i=0;i<${MAX_BLOBS};i++){
-        vec3 bc=vec3((uBlobs[i].x-0.5)*2.0,(uBlobs[i].y-0.5)*2.0,uBlobs[i].w*1.2);
-        vec2 offset=ndc-(bc.xy-center)*parallax*0.5;
-        float contribution=uBlobs[i].z/(dot(offset,offset)*aspect*aspect+0.004);
-        field+=contribution;tint+=uColors[i]*contribution;depth+=contribution*bc.z;weightSum+=contribution;
+        vec2 bc=(uBlobs[i].xy-0.5)*2.0;
+        vec2 delta=p-bc;
+        float d2=dot(delta,delta);
+        float contribution=uBlobs[i].z*uBlobs[i].z/(d2+0.004);
+        field+=contribution;tint+=uColors[i]*contribution;
       }
-      float body=smoothstep(.75,.9,field);
-      float depthShade=0.72+0.28*sin(depth/max(weightSum,.001)*1.9+uTime*0.4);
-      outColor=vec4(tint/max(field,.001)*body*depthShade*1.15,1.0);
+      // Métaball : seuil bas pour une vraie fusion continue, liseré à la frontière
+      float body=smoothstep(0.16,0.26,field);
+      float edge=smoothstep(0.09,0.16,field)*(1.0-smoothstep(0.26,0.34,field));
+      vec3 albedo=tint/max(field,.001);
+      vec3 hot=vec3(1.0,0.85,0.45);
+      vec3 core=mix(albedo,hot,0.1)*body*0.82;
+      vec3 glow=albedo*edge*0.9+vec3(1.0,0.6,0.25)*edge*0.2;
+      float bloom=clamp((field-0.06)/1.0,0.0,0.22);
+      vec3 color=core+glow+vec3(1.0,0.6,0.25)*bloom;
+      outColor=vec4(min(color,vec3(1.0)),1.0);
     }`;
   function shader(type,source){
     const result=gl.createShader(type);gl.shaderSource(result,source);gl.compileShader(result);
@@ -271,8 +279,8 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
 
   function resize(){
     W=Math.max(1,innerWidth);H=Math.max(1,innerHeight);DPR=Math.min(devicePixelRatio||1,1.25);
-    const base=softwareRenderer?(innerWidth<600?.34:.22):(innerWidth<600?.72:.6);
-    const quality=scrolling?Math.min(.5,base):base;
+    const base=softwareRenderer?(innerWidth<600?.55:.4):1;
+    const quality=scrolling?Math.min(.7,base):base;
     canvas.width=Math.max(1,Math.round(W*DPR*quality));canvas.height=Math.max(1,Math.round(H*DPR*quality));
     gl.viewport(0,0,canvas.width,canvas.height);render();
   }
@@ -282,16 +290,55 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   }
   function update(dt){
     time+=Math.min(.05,dt);
-    blobs.forEach((b,i)=>{
-      const wave=time*b.speed+b.phase;
-      b.cx=clamp(b.x+Math.sin(wave*.83+i)*b.dx,.06,.94);
-      b.cy=clamp(b.y+Math.sin(wave+1.7+i*.43)*b.dy,.06,.94);
-      b.cr=b.r*(1+.16*Math.sin(wave*1.35+1.2));
-      b.depth=.5+.2*Math.sin(wave*.67+i*.71);
-    });
+    const steps=dt>0?Math.max(1,Math.round(dt*60)):1;
+    for(let s=0;s<steps;s++){
+      // 1. Bruit doux constant : les blobs dérivent lentement (jamais statiques)
+      blobs.forEach((b,i)=>{
+        const w1=time*0.31+i*1.7,w2=time*0.23+i*0.9;
+        b.vx+=Math.sin(w1)*0.00045+Math.cos(w2)*0.0003;
+        b.vy+=Math.cos(w1*1.3)*0.00045+Math.sin(w2*0.8)*0.0003;
+      });
+      // 2. Paires : partage du mouvement et mélange des couleurs au contact
+      for(let i=0;i<blobs.length;i++){
+        for(let j=i+1;j<blobs.length;j++){
+          const a=blobs[i],b=blobs[j];
+          const dx=b.x-a.x,dy=b.y-a.y;
+          const dist=Math.sqrt(dx*dx+dy*dy);
+          const touch=a.r+b.r;
+          if(dist<touch){
+            // Répulsion élastique : les blobs gardent leur individualité en se touchant
+            const overlap=touch-dist;
+            const push=overlap*0.25;
+            const nx=dx/(dist||1e-5),ny=dy/(dist||1e-5);
+            a.x-=nx*push*.5;a.y-=ny*push*.5;
+            b.x+=nx*push*.5;b.y+=ny*push*.5;
+            // Partage de vitesse : moyenne pondérée (les blobs voyagent ensemble)
+            const mixV=0.35*(overlap/touch);
+            const avx=(a.vx+b.vx)*.5,avy=(a.vy+b.vy)*.5;
+            a.vx=(1-mixV)*a.vx+mixV*avx;a.vy=(1-mixV)*a.vy+mixV*avy;
+            b.vx=(1-mixV)*b.vx+mixV*avx;b.vy=(1-mixV)*b.vy+mixV*avy;
+            // Partage de couleur : les deux tendent vers la moyenne
+            const blend=0.08*(overlap/touch);
+            const avg=lerp3(a.color,b.color,.5);
+            a.color=lerp3(a.color,avg,blend);
+            b.color=lerp3(b.color,avg,blend);
+          }
+        }
+      }
+      // 3. Intégration + amortissement + retour progressif vers la couleur de base
+      blobs.forEach(b=>{
+        b.x+=b.vx;b.y+=b.vy;
+        b.vx*=.995;b.vy*=.995;
+        b.color=lerp3(b.color,b.base,0.0012);
+        if(b.x<b.r){b.x=b.r;b.vx=Math.abs(b.vx)*.7;}
+        if(b.x>1-b.r){b.x=1-b.r;b.vx=-Math.abs(b.vx)*.7;}
+        if(b.y<b.r){b.y=b.r;b.vy=Math.abs(b.vy)*.7;}
+        if(b.y>1-b.r){b.y=1-b.r;b.vy=-Math.abs(b.vy)*.7;}
+      });
+    }
   }
   function render(){
-    blobs.forEach((b,i)=>blobData.set([b.cx||b.x,b.cy||b.y,b.cr||b.r,b.depth??.5],i*4));
+    blobs.forEach((b,i)=>{blobData.set([b.x,b.y,b.r,0],i*4);colorData.set(b.color,i*3);});
     gl.useProgram(program);gl.uniform2f(resolution,canvas.width,canvas.height);gl.uniform1f(timeLocation,time);gl.uniform4fv(blobsLocation,blobData);gl.uniform3fv(colorsLocation,colorData);
     gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,3);
   }
