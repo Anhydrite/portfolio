@@ -193,36 +193,77 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   st.forEach(s=>io.observe(s.el));
 })();
 
-/* ---- Fond lampe à lave : métaballes Canvas 2D basse résolution ---- */
+/* ---- Fond lampe à lave : métaballes calculées par le GPU (WebGL) ---- */
 (function initLava(){
   const host=document.getElementById('lava-bg'),canvas=document.getElementById('lava-canvas');
   if(!host||!canvas)return;
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
-  const ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
-  if(!ctx){host.classList.add('is-fallback');return;}
+  const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,stencil:false,powerPreference:'high-performance'});
+  if(!gl){host.classList.add('is-fallback');return;}
+  const rendererInfo=gl.getExtension('WEBGL_debug_renderer_info');
+  const renderer=rendererInfo?gl.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL):'';
+  const softwareRenderer=/swiftshader|llvmpipe|software/i.test(renderer);
 
-  let reduced=motion.matches,raf=0,last=0,time=0,simW=0,simH=0,image;
+  let reduced=motion.matches,raf=0,last=0,time=0,W=0,H=0,DPR=1;
   const fpsValue=document.querySelector('#fps-counter strong');
   let fpsFrames=0,fpsStamp=performance.now();
-  const TAU=Math.PI*2,clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+  const MAX_BLOBS=8,clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
   const blobs=[
-    {x:.16,y:.23,r:.105,phase:.2,speed:.16,dx:.11,dy:.15,color:[230,34,86]},
-    {x:.39,y:.68,r:.12,phase:2.1,speed:.13,dx:.14,dy:.18,color:[52,190,220]},
-    {x:.63,y:.30,r:.09,phase:4.3,speed:.18,dx:.12,dy:.16,color:[212,42,84]},
-    {x:.84,y:.72,r:.115,phase:5.2,speed:.11,dx:.13,dy:.14,color:[91,116,220]},
-    {x:.47,y:.16,r:.075,phase:1.4,speed:.15,dx:.10,dy:.12,color:[247,92,126]},
-    {x:.23,y:.86,r:.085,phase:3.4,speed:.12,dx:.12,dy:.10,color:[54,169,210]},
-    {x:.76,y:.48,r:.07,phase:4.8,speed:.17,dx:.09,dy:.13,color:[185,62,156]},
-    {x:.54,y:.89,r:.065,phase:2.8,speed:.14,dx:.11,dy:.08,color:[224,48,94]}
+    {x:.16,y:.23,r:.105,phase:.2,speed:.16,dx:.11,dy:.15,color:[.90,.08,.26]},
+    {x:.39,y:.68,r:.12,phase:2.1,speed:.13,dx:.14,dy:.18,color:[.16,.72,.84]},
+    {x:.63,y:.30,r:.09,phase:4.3,speed:.18,dx:.12,dy:.16,color:[.84,.08,.22]},
+    {x:.84,y:.72,r:.115,phase:5.2,speed:.11,dx:.13,dy:.14,color:[.36,.46,.86]},
+    {x:.47,y:.16,r:.075,phase:1.4,speed:.15,dx:.10,dy:.12,color:[.96,.22,.42]},
+    {x:.23,y:.86,r:.085,phase:3.4,speed:.12,dx:.12,dy:.10,color:[.16,.64,.80]},
+    {x:.76,y:.48,r:.07,phase:4.8,speed:.17,dx:.09,dy:.13,color:[.72,.18,.60]},
+    {x:.54,y:.89,r:.065,phase:2.8,speed:.14,dx:.11,dy:.08,color:[.88,.10,.28]}
   ];
+  const blobData=new Float32Array(MAX_BLOBS*4),colorData=new Float32Array(MAX_BLOBS*3);
+  blobs.forEach((b,i)=>colorData.set(b.color,i*3));
+
+  const vertexSource=`#version 300 es
+    in vec2 aPosition;
+    void main(){gl_Position=vec4(aPosition,0.0,1.0);}`;
+  const fragmentSource=`#version 300 es
+    precision highp float;
+    uniform vec2 uResolution;
+    uniform vec4 uBlobs[${MAX_BLOBS}];
+    uniform vec3 uColors[${MAX_BLOBS}];
+    out vec4 outColor;
+    void main(){
+      vec2 uv=gl_FragCoord.xy/uResolution;
+      float aspect=uResolution.x/uResolution.y;
+      float field=0.0;vec3 tint=vec3(0.0);
+      for(int i=0;i<${MAX_BLOBS};i++){
+        vec2 delta=(uv-uBlobs[i].xy)*vec2(aspect,1.0);
+        float contribution=(uBlobs[i].z*uBlobs[i].z)/(dot(delta,delta)+0.0007);
+        field+=contribution;tint+=uColors[i]*contribution;
+      }
+      float body=smoothstep(.82,.94,field);
+      outColor=vec4(tint/max(field,.0001)*body*1.08,1.0);
+    }`;
+  function shader(type,source){
+    const result=gl.createShader(type);gl.shaderSource(result,source);gl.compileShader(result);
+    if(!gl.getShaderParameter(result,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(result));
+    return result;
+  }
+  const program=gl.createProgram();
+  gl.attachShader(program,shader(gl.VERTEX_SHADER,vertexSource));
+  gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fragmentSource));
+  gl.linkProgram(program);
+  if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));
+  const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  const position=gl.getAttribLocation(program,'aPosition');
+  const resolution=gl.getUniformLocation(program,'uResolution');
+  const blobsLocation=gl.getUniformLocation(program,'uBlobs[0]');
+  const colorsLocation=gl.getUniformLocation(program,'uColors[0]');
 
   function resize(){
-    const ratio=Math.max(0.72,Math.min(0.9,innerWidth/1700));
-    simW=Math.max(320,Math.min(800,Math.round(innerWidth*ratio)));
-    simH=Math.max(180,Math.round(simW*innerHeight/Math.max(1,innerWidth)));
-    canvas.width=simW;canvas.height=simH;canvas.style.imageRendering='auto';
-    image=ctx.createImageData(simW,simH);
-    render();
+    W=Math.max(1,innerWidth);H=Math.max(1,innerHeight);DPR=Math.min(devicePixelRatio||1,1.25);
+    const quality=softwareRenderer?(innerWidth<600?.5:.34):(innerWidth<600?.8:.75);
+    canvas.width=Math.max(1,Math.round(W*DPR*quality));canvas.height=Math.max(1,Math.round(H*DPR*quality));
+    gl.viewport(0,0,canvas.width,canvas.height);render();
   }
   function update(dt){
     time+=Math.min(.05,dt);
@@ -234,41 +275,17 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     });
   }
   function render(){
-    if(!image)return;
-    const data=image.data,aspect=simW/Math.max(1,simH);
-    for(let py=0;py<simH;py++)for(let px=0;px<simW;px++){
-      const x=(px+.5)/simW,y=(py+.5)/simH;
-      let field=0,weight=0,red=0,green=0,blue=0;
-      for(const b of blobs){
-        const dx=(x-b.cx)*aspect,dy=y-b.cy;
-        const d2=dx*dx+dy*dy+0.0007,contribution=(b.cr*b.cr)/d2;
-        field+=contribution;weight+=contribution;
-        red+=b.color[0]*contribution;green+=b.color[1]*contribution;blue+=b.color[2]*contribution;
-      }
-      // Transition très courte pour lisser le contour sans ajouter de blur.
-      const body=clamp((field-.82)/.12);
-      const tint=weight?1/weight:0;
-      const idx=(py*simW+px)*4;
-      data[idx]=Math.round(red*tint*body*1.08);
-      data[idx+1]=Math.round(green*tint*body*1.08);
-      data[idx+2]=Math.round(blue*tint*body*1.08);
-      data[idx+3]=255;
-    }
-    ctx.putImageData(image,0,0);
+    blobs.forEach((b,i)=>blobData.set([b.cx||b.x,b.cy||b.y,b.cr||b.r,0],i*4));
+    gl.useProgram(program);gl.uniform2f(resolution,canvas.width,canvas.height);gl.uniform4fv(blobsLocation,blobData);gl.uniform3fv(colorsLocation,colorData);
+    gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,3);
   }
   function updateFps(now){
     if(!fpsValue)return;
-    fpsFrames++;
-    const elapsed=now-fpsStamp;
-    if(elapsed<500)return;
-    const fps=Math.round(fpsFrames*1000/elapsed);
-    fpsValue.textContent=String(fps);
-    fpsValue.dataset.level=fps<30?'low':fps<55?'mid':'good';
-    fpsFrames=0;fpsStamp=now;
+    fpsFrames++;const elapsed=now-fpsStamp;if(elapsed<500)return;
+    const fps=Math.round(fpsFrames*1000/elapsed);fpsValue.textContent=String(fps);fpsValue.dataset.level=fps<30?'low':fps<55?'mid':'good';fpsFrames=0;fpsStamp=now;
   }
   function frame(now){
     raf=0;if(document.hidden||reduced)return;
-    if(last&&now-last<40){raf=requestAnimationFrame(frame);return;}
     const dt=last?Math.min(.05,(now-last)/1000):.016;last=now;update(dt);render();updateFps(now);raf=requestAnimationFrame(frame);
   }
   function stop(){if(raf){cancelAnimationFrame(raf);raf=0;}last=0;}
@@ -278,9 +295,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     if(reduced){if(fpsValue)fpsValue.textContent='—';}
     else{fpsFrames=0;fpsStamp=performance.now();start();}
   }
-
   try{
-    resize();update(.016);render();start();
+    gl.clearColor(0,0,0,1);resize();update(.016);render();if(reduced&&fpsValue)fpsValue.textContent='—';else start();
+    canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();stop();host.classList.add('is-fallback');},{passive:false});
     document.addEventListener('visibilitychange',()=>document.hidden?stop():start(),{passive:true});
     addEventListener('resize',resize,{passive:true});
     if(motion.addEventListener)motion.addEventListener('change',updateMotion);else if(motion.addListener)motion.addListener(updateMotion);
