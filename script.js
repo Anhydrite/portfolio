@@ -215,9 +215,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   ];
 
   function resize(){
-    const ratio=Math.max(0.45,Math.min(0.72,innerWidth/1700));
-    simW=Math.max(180,Math.min(420,Math.round(innerWidth*ratio)));
-    simH=Math.max(120,Math.round(simW*innerHeight/Math.max(1,innerWidth)));
+    const ratio=Math.max(0.72,Math.min(0.9,innerWidth/1700));
+    simW=Math.max(320,Math.min(800,Math.round(innerWidth*ratio)));
+    simH=Math.max(180,Math.round(simW*innerHeight/Math.max(1,innerWidth)));
     canvas.width=simW;canvas.height=simH;canvas.style.imageRendering='auto';
     image=ctx.createImageData(simW,simH);
     render();
@@ -243,7 +243,8 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
         field+=contribution;weight+=contribution;
         red+=b.color[0]*contribution;green+=b.color[1]*contribution;blue+=b.color[2]*contribution;
       }
-      const body=field>.92?1:0;
+      // Transition très courte pour lisser le contour sans ajouter de blur.
+      const body=clamp((field-.82)/.12);
       const tint=weight?1/weight:0;
       const idx=(py*simW+px)*4;
       data[idx]=Math.round(red*tint*body*1.08);
@@ -255,7 +256,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   }
   function frame(now){
     raf=0;if(document.hidden||reduced)return;
-    if(last&&now-last<32){raf=requestAnimationFrame(frame);return;}
+    if(last&&now-last<40){raf=requestAnimationFrame(frame);return;}
     const dt=last?Math.min(.05,(now-last)/1000):.016;last=now;update(dt);render();raf=requestAnimationFrame(frame);
   }
   function stop(){if(raf){cancelAnimationFrame(raf);raf=0;}last=0;}
