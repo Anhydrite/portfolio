@@ -211,8 +211,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
 
   // ---------- Paramètres physiques (tunables) ----------
-  const MAX=520, N=480;            // capacité max + nb de particules : pool PLEINE LARGEUR (~94 % de l'écran) avec une vraie épaisseur
-  const RENDER_MAX=520;            // particules rendues (toutes → surface lisse)
+  const MAX=620, N=560;            // capacité max + nb de particules : pool PLEINE LARGEUR avec une vraie
+                                    // épaisseur et une surface TRÈS dense (plus de détail, moins de grain)
+  const RENDER_MAX=620;            // particules rendues (toutes → surface lisse)
   const H_SMOOTH=0.042;            // rayon d'interaction SPH (unités = hauteur d'écran)
   const REST_DENSITY=1.6;          // densité de repos
   const K_PRESSURE=0.18;           // raideur de pression
@@ -581,8 +582,8 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       // y=0 (sol) → bas de la texture ; x ∈ [0,aspect] → [0,1]
       vec2 ndc=vec2(aPos.x/uAspect*2.0-1.0, aPos.y*2.0-1.0);
       gl_Position=vec4(ndc,0.0,1.0);
-      gl_PointSize=82.0;        // splat adapté à la texture haute résolution (1024×640) :
-                                // même couverture monde qu'avant → bords d'iso-surface nets
+      gl_PointSize=123.0;       // splat adapté à la texture 1536×960 : même couverture monde
+                                // → bords d'iso-surface très nets, détails fins visibles
     }`;
   const splatFS=`#version 300 es
     precision highp float;
@@ -592,9 +593,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       vec2 uv=gl_PointCoord*2.0-1.0;
       float d=length(uv);
       float w=exp(-d*d*4.0);   // gaussienne large → champ de densité lisse
-      w*=0.19;                  // NORMALISATION : le pool dense (~15 particules/texel) atteint
-                                // R≈0.9-1.0 sans saturer brutalement → le ratio G/R reste la vraie
-                                // température (sinon R et G saturent à 1.0 → blanc partout)
+      w*=0.56;                  // NORMALISATION pour texture 1536×960 : le pool dense atteint
+                                // R≈0.9-1.0 sans saturer → le ratio G/R reste la vraie température
+                                // (le pool couvre ~3× plus de texels qu'à 1024×640)
       outColor=vec4(w, w*vTemp, 0.0, 0.0);  // R=densité, G=densité×température (somme pondérée), A=0
                                               // (le canal A est réservé à la température MAX, passe suivante)
     }`;
@@ -608,7 +609,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       vec2 uv=gl_PointCoord*2.0-1.0;
       float d=length(uv);
       float w=exp(-d*d*4.0);
-      w*=0.19;                 // même normalisation que la passe densité
+      w*=0.56;                 // même normalisation que la passe densité (texture 1536×960)
       outColor=vec4(0.0, 0.0, 0.0, vTemp); // A=température max
     }`;
   const splat=makeProg(splatVS,splatFS,['uRes','uAspect']);
@@ -667,18 +668,42 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       float blendHot=smoothstep(0.55, 0.18, dens); // 1 quand densité faible (colonnes)
       float t=mix(tAvg, tMax, blendHot);
       // ISO-SURFACE : seuil de densité → forme pleine, bords adoucis
-      // (texture RGBA8 → valeurs normalisées 0-1 ; la densité du pool sature vers 1.0)
-      float iso=0.38;               // seuil de densité — légèrement relevé : ne garde que les zones
-                                    // denses → silhouettes plus nettes, moins de bordure floue
-      float soft=0.10;              // largeur d'adoucissement du bord — resserrée : contour précis
+      float iso=0.38;               // seuil de densité — ne garde que les zones denses
+      float soft=0.10;              // adoucissement du bord resserré : contour précis
       float surf=smoothstep(iso, iso+soft, dens);
       vec3 col=tempToColor(t);
-      // lueur chaude sous la surface (transitions de température)
+
+      // ===== LUMIÈRE 3D (effet liquide) : gradient de densité = normale de surface =====
+      // On dérive la densité pour obtenir la normale → lumière d'en haut-gauche (relief).
+      // Échelle de dérivation = 2 texels (moins de samples, relief stable, coût réduit).
+      vec2 texel=2.0/uDensSize;
+      float dL=texture(uDens, uv+vec2(-texel.x,0.0)).r;
+      float dR=texture(uDens, uv+vec2( texel.x,0.0)).r;
+      float dD=texture(uDens, uv+vec2(0.0,-texel.y)).r;
+      float dU=texture(uDens, uv+vec2(0.0, texel.y)).r;
+      vec3 nrm=normalize(vec3(dL-dR, dU-dD, 1.2));  // normale approchée
+      vec3 lightDir=normalize(vec3(0.45, 0.65, 0.6)); // lumière haut-gauche
+      float diff=max(0.0, dot(nrm, lightDir));
+      // Speculaire : reflet net sur les zones courbes (gouttes brillantes)
+      vec3 viewDir=vec3(0.0, 0.0, 1.0);
+      vec3 halfVec=normalize(lightDir+viewDir);
+      float spec=pow(max(0.0, dot(nrm, halfVec)), 24.0)*0.55;
+      // Rim light : liseré lumineux sur les bords (effet verre/liquide)
+      float rim=pow(1.0-max(0.0, dot(nrm, viewDir)), 3.0)*0.35;
+
       vec3 outCol=bg;
       if(surf>0.0){
         outCol=mix(bg, col, surf);
-        // léger éclat au bord (ambient)
-        outCol+=vec3(0.09,0.03,0.06)*surf;   // lueur rose/cramoisi (charte)
+        // ombrage diffus (relief)
+        outCol*=mix(0.82, 1.08, diff);
+        // reflet spéculaire blanc glacial (charte)
+        outCol+=vec3(0.75,0.85,1.0)*spec;
+        // rim light bleu glacier
+        outCol+=vec3(0.35,0.55,0.80)*rim;
+        // lueur chaude interne (transitions de température)
+        outCol+=vec3(0.09,0.03,0.06)*surf;
+        // éclat au bord du pool (chaud)
+        outCol+=col*0.12*surf;
       }
       outColor=vec4(outCol,1.0);
     }`;
@@ -696,8 +721,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const compPosLoc=gl.getAttribLocation(comp.p,'aPos');
 
   // FBO + texture de densité (basse résolution, RGBA8 portable)
-  const DENS_W=1024, DENS_H=640;  // texture de densité TRÈS HAUTE résolution → qualité maximale
-                                    // (bords nets, lissage fin, pas de flou d'upscale)
+  const DENS_W=1536, DENS_H=960;  // texture de densité ULTRA HAUTE résolution (1.5× vs 1024×640) :
+                                    // qualité maximale avec un coût GPU raisonnable (le rendu headless
+                                    // SwiftShader reste non représentatif ; sur GPU réel c'est fluide)
   const densTex=gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D,densTex);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
