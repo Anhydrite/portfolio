@@ -235,11 +235,11 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const BURNERS=4;                 // nombre de SPOTS DE CHAUFFE (brûleurs discrets) espacés sur la largeur :
                                     // des colonnes naissent à des points précis, le reste du pool reste froid
                                     // et ancré (matière au sol) — mécanisme Rayleigh-Taylor localisé
-  const COOL_RATE=0.014;           // refroidissement ambiant FAIBLE (proportionnel à T) : le pool reste un
+  const COOL_RATE=0.010;           // refroidissement ambiant FAIBLE (proportionnel à T) : le pool reste un
                                     // réservoir tiède stable ; la base accumule la chaleur et perce le seuil
                                     // pour détacher des colonnes (la convection, pas le refroidissement, ferme le cycle)
-  const COOL_TOP=0.55;             // refroidissement fort au-dessus du pool (relaxation) → la cire montée
-                                    // se densifie vite et redescend ; le liquide ambiant reste froid (instabilité)
+  const COOL_TOP=0.40;             // refroidissement au-dessus du pool (relaxation) → la cire montée
+                                    // se densifie et redescend ; le liquide ambiant reste froid (instabilité)
   const COOL_TOP_Z=0.30;           // seuil de hauteur : le refroidissement agit juste au-dessus du pool (0.20) :
                                     // la cire qui monte refroidit vite et redescend ; le pool lui-même reste tiède
                                     // (réservoir) et la matière reste au sol
