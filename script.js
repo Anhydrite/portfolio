@@ -291,25 +291,52 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const P=[];                      // particules {x,y,vx,vy,px,py,temp,r}
 
   function initParticles(){
-    // Pool de cire compact posé sur la plaque (le "gros bloc") : dôme ellipsoïdal étroit,
-    // comme la masse de cire d'une vraie lampe (~15 % de la largeur de chaque côté).
-    // Pool de cire PLEINE LARGEUR : dôme large et bas posé sur la plaque (~94 % de l'écran),
-    // assez épais pour garder de la matière au sol. La lave occupe tout l'écran.
-    const cx=aspect*0.5, s=0.020, floorY=0.02, topY=0.20, halfW=aspect*0.47;
+    // 1) Pool de cire PLEINE LARGEUR posé sur la plaque (le "gros bloc") :
+    //    dôme large et bas (~94 % de l'écran), la matière au sol.
+    const cx=aspect*0.5, s=0.020, floorY=0.02, topY=0.16, halfW=aspect*0.47;
     P.length=0;
     const rows=Math.ceil((topY-floorY)/(s*0.80));
-    for(let row=0;row<rows&&P.length<N;row++){
+    for(let row=0;row<rows&&P.length<Math.floor(N*0.55);row++){
       const y=floorY+row*s*0.80;
       const dy=(y-floorY)/(topY-floorY);
       const rw=Math.sqrt(Math.max(0,1-dy*dy));
       const off=(row&1)?s*0.5:0;
       const cols=Math.floor((rw*halfW)/s);
-      for(let col=-cols;col<=cols&&P.length<N;col++){
+      for(let col=-cols;col<=cols&&P.length<Math.floor(N*0.55);col++){
         const x=cx+col*s+off;
         if(x>s&&x<aspect-s){
-          P.push({x,y,vx:0,vy:0,px:x,py:y,temp:0.18,r:PART_RADIUS}); // cire froide au chargement → la préchauffe est visible
+          P.push({x,y,vx:0,vy:0,px:x,py:y,temp:0.18,r:PART_RADIUS}); // cire froide → la préchauffe est visible
         }
       }
+    }
+    // 2) BOULE DE LIQUIDE qui tombe d'en haut au chargement : une masse compacte et froide
+    //    placée au-dessus du pool, avec une vitesse de chute → elle s'écrase sur le pool
+    //    et éclabousse (comme la version d'origine).
+    const dropR=Math.min(aspect*0.14, 0.24);          // rayon de la boule (proportionnel à la largeur)
+    const dropCx=cx, dropCy=0.80;                     // centre de la boule (HAUT, pour une chute visible)
+    const dropS=s*1.05;
+    const dropRows=Math.ceil((dropR*2)/dropS);
+    const remaining=N-P.length;
+    let added=0;
+    for(let row=-dropRows;row<=dropRows&&added<remaining;row++){
+      const y=dropCy+row*dropS*0.866;
+      const dy=(y-dropCy)/dropR;
+      const rw=Math.sqrt(Math.max(0,1-dy*dy));
+      const off=(row&1)?dropS*0.5:0;
+      const cols=Math.floor((rw*dropR)/dropS);
+      for(let col=-cols;col<=cols&&added<remaining;col++){
+        const x=dropCx+col*dropS+off;
+        if(x>dropS&&x<aspect-dropS&&y>0.05&&y<0.98){
+          P.push({x,y,vx:0,vy:0.9,px:x,py:y-dropS,temp:0.10,r:PART_RADIUS}); // chute un peu plus lente → splash visible
+          added++;
+        }
+      }
+    }
+    // Si la boule a dépassé le pool (petits écrans), on complète avec les particules restantes
+    // dans le pool pour garder la masse au sol.
+    while(P.length<N){
+      const x=cx+(Math.random()-0.5)*aspect*0.9, y=floorY+Math.random()*topY;
+      P.push({x,y,vx:0,vy:0,px:x,py:y,temp:0.18,r:PART_RADIUS});
     }
   }
 
