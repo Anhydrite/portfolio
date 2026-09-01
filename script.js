@@ -221,22 +221,22 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const K_PRESSURE=0.18;           // raideur de pression
   const K_NEAR=0.018;              // raideur de pression proche (tension de surface / incompressibilité) — douce
   const VISCOSITY=0.12;            // viscosité (XSPH) — élevée → ondes amorties, surface plane
-  const COHESION=0.02;             // cohésion (tension de surface) réduite → l'eau s'étale plus librement
+  const COHESION=0.040;            // cohésion (tension de surface) — forte → les blobs restent cohérents et se détachent en gouttes (pas de pulvérisation)
   const COH_RANGE=1.30;            // portée de la cohésion (× H_SMOOTH)
   const GRAVITY=0.40;              // gravité (unités/s²) — un peu plus faible pour ralentir la convection
   const BUOYANCY=0.55;             // poussée d.Archimède (unités/s² par écart de température) — forte → le chaud monte vite (bulles)
-  const HEAT_RATE=0.42;            // taux de chauffe de la plaque (forte convection)
+  const HEAT_RATE=1.0;            // taux de chauffe de la plaque → vers chaud (fond bien chaud sans surchauffe explosive)
   const HEAT_ZONE=0.30;            // (réservé) hauteur plafond de la zone de chauffe
-  const HEAT_THICK=0.10;           // épaisseur de la plaque chauffante — plus épaisse → la chaleur pénètre dans toute la masse
-  const COOL_RATE=0.004;           // refroidissement naturel faible → forte inertie thermique (l'eau garde le chaud)
-  const COOL_TOP=0.03;             // refroidissement additionnel en haut (réduit)
-  const COOL_TOP_Z=0.62;           // seuil de hauteur pour le refroidissement additionnel
+  const HEAT_THICK=0.10;           // épaisseur de la plaque chauffante — la chaleur pénètre dans toute la masse
+  const COOL_RATE=0.012;           // refroidissement ambiant par RELAXATION vers le froid (proportionnel à T) — stable
+  const COOL_TOP=0.30;             // refroidissement fort en altitude (relaxation) → la cire montée se densifie et redescend
+  const COOL_TOP_Z=0.50;           // seuil de hauteur : au-dessus, la matière refroidit franchement
   const CEIL_RECALL=0.25;          // force de rappel vers le bas au-dessus de CEIL_Z (ferme le cycle)
   const CEIL_Z=0.75;               // altitude au-delà de laquelle le liquide est rabattu
-  const CONDUCT=0.30;               // conduction thermique entre particules — forte → la chaleur remonte vite en bulles
+  const CONDUCT=0.15;               // conduction thermique entre particules — modérée → un gradient vertical net (fond chaud) se maintient, source des bulles
   const T_CRITICAL=0.50;           // seuil critique : au-delà, le liquide s'allège et vole
   const THERMAL_NOTEFF=0.50;       // expansion : xREST_DENSITY effectif en dessous de ce seuil
-  const THERMAL_BOOST=1.6;         // accélération nette vers le haut des particules critiques (surchauffe locale)
+  const THERMAL_BOOST=0.6;         // surchauffe locale → accélération nette douce vers le haut (détachement serein de bulles, sans déchirer la masse)
   const RESTITUTION=0.35;          // rebond (sol/murs) — suffisant pour des éclaboussures vivantes
   const DAMPING=0.992;             // amortissement global
   const GROUND_FRICTION=0.96;      // friction au sol
@@ -402,18 +402,20 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       if(p.y>1-p.r){p.y=1-p.r; if(p.vy>0){p.vy=-p.vy*RESTITUTION;} p.vx*=0.90;}
     }
 
-    // 8. Thermique : PLAQUE FINE au sol — seule la fine couche en contact avec le
-    //    fond chauffe fort et localement. Le reste du liquide ne chauffe QUE par
-    //    conduction (le gradient de température se propage du bas vers le haut).
+    // 8. Thermique : PLAQUE au sol qui chauffe vers le chaud, et refroidissement par
+    //    RELAXATION vers le froid (proportionnel à T). Ce couplage fond-chaud / sommet-froid
+    //    maintient un gradient vertical STABLE : la cire chaude (plus légère) monte,
+    //    se densifie en altitude (passe sous la densité de croisement ~0.5) et redescend.
     for(let i=0;i<P.length;i++){
       const p=P[i];
-      const depth=p.y; // y=0 = le fond (plaque chauffante fine)
+      const depth=p.y; // y=0 = le fond (plaque chauffante)
       if(depth<HEAT_THICK){
-        // Plaque fine : chauffe maximale et très localisée au contact immédiat
+        // Plaque : chauffe maximale et très localisée au contact immédiat → vers le chaud
         p.temp+=HEAT_RATE*(1.0-depth/HEAT_THICK)*3.0*h;
       }
-      p.temp-=COOL_RATE*h; // refroidissement ambiant partout
-      if(p.y>COOL_TOP_Z){p.temp-=COOL_TOP*(p.y-COOL_TOP_Z)*h;} // + en altitude
+      // Refroidissement par relaxation vers le froid (stable, pas de saignée constante)
+      p.temp-=COOL_RATE*p.temp*h;                                     // ambiant partout
+      if(p.y>COOL_TOP_Z){p.temp-=COOL_TOP*(p.y-COOL_TOP_Z)*p.temp*h;} // fort en altitude → redensifie la cire montée
       p.temp=clamp(p.temp,0,1);
     }
     // Conduction : propage la chaleur depuis la plaque vers le haut (gradient)

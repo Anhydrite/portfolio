@@ -85,17 +85,17 @@ Ce sont des constantes `const` en haut de la section `initLava`. Ajuster **prude
 | `REST_DENSITY` / `K_PRESSURE` | incompressibilité |
 | `K_NEAR` | pression proche (tension) — sur-élevé → pics |
 | `VISCOSITY` | lissage des vitesses (surface plane) |
-| `COHESION` / `COH_RANGE` | formation de gouttes / blobs |
+| `COHESION` / `COH_RANGE` | formation de gouttes / blobs — modérément élevée → gouttes cohérentes qui se détachent sans pulvériser |
 | `GRAVITY` | gravité (chute + étalement) |
-| `BUOYANCY` / `T_CRITICAL` / `THERMAL_BOOST` | convection + seuil critique → blobs qui volent |
-| `HEAT_RATE` / `COOL_RATE` / `COOL_TOP` / `CONDUCT` | cycle thermique (chauffe au fond, refroidissement) |
+| `BUOYANCY` / `T_CRITICAL` / `THERMAL_BOOST` | convection + seuil critique → blobs qui volent — boost **doux** (0.6) pour un détachement serein |
+| `HEAT_RATE` / `COOL_RATE` / `COOL_TOP` / `COOL_TOP_Z` / `CONDUCT` | cycle thermique : plaque → vers chaud ; refroidissement par **relaxation** vers le froid (ferme le retour) |
 | `CEIL_RECALL` / `CEIL_Z` | rappel gravitaire (évite l'accumulation au plafond) |
 | `DAMPING` | dissipation globale → état stable à chaleur nulle |
 | `RESTITUTION` / `GROUND_FRICTION` | rebond + friction (splash à l'impact) |
 
 Règles d'équilibre importantes :
-- La poussée au-dessus du seuil doit **dépasser de peu** la gravité pour détacher des bulles sans tout soulever.
-- La chauffe doit **pénétrer dans la masse** (`HEAT_THICK` assez épais + `CONDUCT` fort) sinon seules les particules du fond chauffent → pas de convection, pas de bulles.
+- La poussée au-dessus du seuil doit **dépasser de peu** la gravité pour détacher des bulles sans tout soulever (boost faible, ~0.6).
+- Un **gradient vertical net** doit se maintenir : plaque → fortement chaud au contact, refroidissement par RELAXATION proportionnel à T en altitude → la cire montée se densifie et redescend. Sans ce retour, tout le bloc monte et l'équilibre donne un **gros bloc figé**.
 - Le refroidissement en altitude + le rappel plafond ferment le cycle (monte → refroidit → descend).
 
 ### 3.4 Rendu
@@ -104,6 +104,8 @@ Règles d'équilibre importantes :
 - Le canvas (`#lava-canvas`) est étiré par CSS `width:100%`.
 
 ### 3.5 Pièges connus (leçons apprises)
+- **Le cycle s'effondre en un bloc figé** : si le refroidissement est une simple **soustraction constante** et trop faible, toute la masse se réchauffe à ~0.6-0.7, le gradient thermique s'aplatit et il ne reste qu'un gros bloc immobile au fond (plus de bulles après 2-3 min). **Solution : refroidissement par RELAXATION vers le froid** (`p.temp -= COOL_TOP*(y-Z)*p.temp*h`, proportionnel à T) + chauffe plaque forte (`HEAT_RATE~1`) + cohésion modérée (`COHESION~0.04`) + conduction réduite (`CONDUCT~0.15` pour garder le gradient).
+- **Pulvérisation en ~50 fragments** : boost thermique trop fort (`THERMAL_BOOST=1.6` déchire la masse, accélération +1.47g). Le baisser à ~0.6 donne un détachement doux en gouttes.
 - **Flicks / rollback** : un fluide posé garde une vitesse de chute que la relaxation de pression contrarie, d'où des remontées brusques en fin de cycle. **Solution retenue : réconciliation PBD** — recalculer la vitesse à partir du déplacement effectif (`vx=(x-px)/dt`) après la relaxation de pression. Élimine le flick à la source **sans couche d'amortissement au sol** (une telle couche étouffait l'éclaboussure + la convection + empêchait l'eau de descendre).
 - **Toute la masse s'envole** : chauffe trop uniforme ou boost thermique trop fort → concentrer la chauffe au fond, équilibrer boost/gravité.
 - **Aucune convection / l'eau reste plate en bas** : chauffe trop localisée (`HEAT_THICK` minuscule) + `CONDUCT` trop faible → la chaleur ne monte pas. Épaissir la plaque et augmenter la conduction.
@@ -115,7 +117,8 @@ Règles d'équilibre importantes :
 
 ## 4. État actuel & prochaines étapes
 
-- La physique SPH (chute → splash → chauffe au fond → convection → blobs) fonctionne et a été validée visuellement et quantitativement. **0 flick** mesuré.
+- La physique SPH (chute → splash → chauffe au fond → convection) fonctionne. **0 flick** mesuré.
+- **Correction récente (2024) : le cycle de convection est maintenant SOUTENU dans le temps.** Avant, après ~2-3 min toute la masse se figeait en un gros bloc homogène à ~0.6 (plus de bulles). Cause : refroidissement par soustraction constante trop faible → gradient thermique aplati. Correctif : refroidissement **par relaxation** vers le froid en altitude + chauffe plaque forte + boost doux + cohésion/conductance rééquilibrées. Validé quantitativement sur **10 min simulées** : un gros bloc de base ancré (baseN 185-357, cy~0.2) avec détachement continu de bulles (0-5 en colonne) qui montent et redescendent — jamais gelé ni pulvérisé. La **coalescence** (fusion de bulles) est un comportement émergent observé (le nombre de bulles détachées fluctue à la baisse lors des fusions).
 - Actuellement en train de **repasser le rendu en 2D** pour la performance. Le rendu par splat de points est opérationnel mais encore à finaliser pour une **surface lisse et unie** (le look "voxel/blocs" reste à corriger).
 
 Prochaine direction suggérée (si l'utilisateur continue) :
