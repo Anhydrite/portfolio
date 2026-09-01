@@ -581,8 +581,8 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       // y=0 (sol) → bas de la texture ; x ∈ [0,aspect] → [0,1]
       vec2 ndc=vec2(aPos.x/uAspect*2.0-1.0, aPos.y*2.0-1.0);
       gl_Position=vec4(ndc,0.0,1.0);
-      gl_PointSize=41.0;        // splat redimensionné pour la texture haute résolution (512×320) :
-                                // même couverture monde qu'avant → bords d'iso-surface plus nets
+      gl_PointSize=82.0;        // splat adapté à la texture haute résolution (1024×640) :
+                                // même couverture monde qu'avant → bords d'iso-surface nets
     }`;
   const splatFS=`#version 300 es
     precision highp float;
@@ -668,9 +668,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       float t=mix(tAvg, tMax, blendHot);
       // ISO-SURFACE : seuil de densité → forme pleine, bords adoucis
       // (texture RGBA8 → valeurs normalisées 0-1 ; la densité du pool sature vers 1.0)
-      float iso=0.35;               // seuil de densité (0-1) — pour la densité normalisée :
-                                    // les zones denses (pool, blobs) passent le seuil
-      float soft=0.35;              // largeur d'adoucissement du bord
+      float iso=0.38;               // seuil de densité — légèrement relevé : ne garde que les zones
+                                    // denses → silhouettes plus nettes, moins de bordure floue
+      float soft=0.10;              // largeur d'adoucissement du bord — resserrée : contour précis
       float surf=smoothstep(iso, iso+soft, dens);
       vec3 col=tempToColor(t);
       // lueur chaude sous la surface (transitions de température)
@@ -696,7 +696,8 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const compPosLoc=gl.getAttribLocation(comp.p,'aPos');
 
   // FBO + texture de densité (basse résolution, RGBA8 portable)
-  const DENS_W=512, DENS_H=320;  // texture de densité HAUTE résolution → qualité augmentée (bords nets, lissage fin)
+  const DENS_W=1024, DENS_H=640;  // texture de densité TRÈS HAUTE résolution → qualité maximale
+                                    // (bords nets, lissage fin, pas de flou d'upscale)
   const densTex=gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D,densTex);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
@@ -768,13 +769,13 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   }
   function resize(){
     W=Math.max(1,innerWidth);H=Math.max(1,innerHeight);
-    DPR=Math.min(devicePixelRatio||1,1.5);
+    DPR=Math.min(devicePixelRatio||1,2.0);
     const newAspect=clamp(W/H,0.4,3.0);
     if(!P.length){aspect=newAspect;initParticles();}
     else{const k=newAspect/aspect;for(let i=0;i<P.length;i++){P[i].x*=k;P[i].px*=k;}aspect=newAspect;}
-    // Résolution du canvas : rendu en basse résolution + upscale CSS → chaque splat couvre
-    // plus de pixels → surface lisse et continue (masque le grain des particules SPH).
-    const base=0.85;                 // qualité de rendu AUGMENTÉE (canvas proche de la résolution écran, lissage par la texture)
+    // Résolution du canvas : rendu PLEINE RÉSOLUTION (DPR complet, pas d'upscale CSS)
+    // → image nette ; la surface reste lisse grâce à l'iso-surface sur la texture fine.
+    const base=1.0;                  // qualité maximale : canvas = résolution écran × DPR
     const quality=scrolling?Math.min(0.8,base):base;
     canvas.width=Math.max(1,Math.round(W*DPR*quality));
     canvas.height=Math.max(1,Math.round(H*DPR*quality));
