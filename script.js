@@ -204,9 +204,6 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
   const gl=canvas.getContext('webgl2',{alpha:false,antialias:true,depth:false,stencil:false,powerPreference:'high-performance'});
   if(!gl){host.classList.add('is-fallback');return;}
-  const rendererInfo=gl.getExtension('WEBGL_debug_renderer_info');
-  const renderer=rendererInfo?gl.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL):'';
-  const softwareRenderer=/swiftshader|llvmpipe|software/i.test(renderer);
 
   let reduced=motion.matches,raf=0,last=0,W=0,H=0,DPR=1,scrolling=false,scrollTimer=0,accumulator=0;
   const fpsValue=document.querySelector('#fps-counter strong');
@@ -214,53 +211,99 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
 
   // ---------- Paramètres physiques (tunables) ----------
-  const MAX=640, N=540;            // capacité max + nombre de particules (physique dense)
-  const RENDER_MAX=540;            // particules rendues (toutes → surface lisse)
+  const MAX=520, N=480;            // capacité max + nb de particules : pool PLEINE LARGEUR (~94 % de l'écran) avec une vraie épaisseur
+  const RENDER_MAX=520;            // particules rendues (toutes → surface lisse)
   const H_SMOOTH=0.042;            // rayon d'interaction SPH (unités = hauteur d'écran)
   const REST_DENSITY=1.6;          // densité de repos
   const K_PRESSURE=0.18;           // raideur de pression
-  const K_NEAR=0.018;              // raideur de pression proche (tension de surface / incompressibilité) — douce
-  const VISCOSITY=0.12;            // viscosité (XSPH) — élevée → ondes amorties, surface plane
-  const COHESION=0.040;            // cohésion (tension de surface) — forte → les blobs restent cohérents et se détachent en gouttes (pas de pulvérisation)
+  const K_NEAR=0.024;              // raideur de pression proche (tension de surface) — arrondit les gouttes détachées
+  const VISCOSITY=0.15;            // viscosité (XSPH) — laminaire mais pas étouffante
+  const COHESION=0.045;            // cohésion (tension de surface) — blobs ronds, convection préservée
   const COH_RANGE=1.30;            // portée de la cohésion (× H_SMOOTH)
-  const GRAVITY=0.40;              // gravité (unités/s²) — un peu plus faible pour ralentir la convection
-  const BUOYANCY=0.55;             // poussée d.Archimède (unités/s² par écart de température) — forte → le chaud monte vite (bulles)
-  const HEAT_RATE=1.0;            // taux de chauffe de la plaque → vers chaud (fond bien chaud sans surchauffe explosive)
+  const GRAVITY=0.34;              // gravité (unités/s²) — réduite : la base chaude (temp≈1.0) peut vaincre
+                                    // la gravité et monter (poussée ~0.6 > 0.34) ; le dessus froid (0.3-0.5)
+                                    // reste plus lourd que sa poussée → redescend (matière au sol)
+  const BUOYANCY=0.85;             // poussée d'Archimède (unités/s² par écart de température) — forte :
+                                    // la base chaude (≈1.0) monte franchement, le dessus froid redescend
+  const HEAT_RATE=0.70;            // taux de chauffe de la plaque → la base du pool devient franchement
+                                    // chaude (≈0.9-1.0) et perce le seuil pour détacher des colonnes ;
+                                    // le reste du pool reste tiède (0.5-0.6) → matière au sol
+  const WARMUP=35;                 // durée de PRÉCHAUFFE au chargement (s) : la plaque monte de 0 → pleine puissance (courbe smoothstep)
   const HEAT_ZONE=0.30;            // (réservé) hauteur plafond de la zone de chauffe
-  const HEAT_THICK=0.10;           // épaisseur de la plaque chauffante — la chaleur pénètre dans toute la masse
-  const COOL_RATE=0.012;           // refroidissement ambiant par RELAXATION vers le froid (proportionnel à T) — stable
-  const COOL_TOP=0.30;             // refroidissement fort en altitude (relaxation) → la cire montée se densifie et redescend
-  const COOL_TOP_Z=0.50;           // seuil de hauteur : au-dessus, la matière refroidit franchement
+  const HEAT_THICK=0.07;           // épaisseur de la plaque chauffante — couche basse du pool :
+                                    // le fond chauffe fort, le dessus du pool reste à température intermédiaire
+  const BURNERS=4;                 // nombre de SPOTS DE CHAUFFE (brûleurs discrets) espacés sur la largeur :
+                                    // des colonnes naissent à des points précis, le reste du pool reste froid
+                                    // et ancré (matière au sol) — mécanisme Rayleigh-Taylor localisé
+  const COOL_RATE=0.014;           // refroidissement ambiant FAIBLE (proportionnel à T) : le pool reste un
+                                    // réservoir tiède stable ; la base accumule la chaleur et perce le seuil
+                                    // pour détacher des colonnes (la convection, pas le refroidissement, ferme le cycle)
+  const COOL_TOP=0.55;             // refroidissement fort au-dessus du pool (relaxation) → la cire montée
+                                    // se densifie vite et redescend ; le liquide ambiant reste froid (instabilité)
+  const COOL_TOP_Z=0.30;           // seuil de hauteur : le refroidissement agit juste au-dessus du pool (0.20) :
+                                    // la cire qui monte refroidit vite et redescend ; le pool lui-même reste tiède
+                                    // (réservoir) et la matière reste au sol
   const CEIL_RECALL=0.25;          // force de rappel vers le bas au-dessus de CEIL_Z (ferme le cycle)
   const CEIL_Z=0.75;               // altitude au-delà de laquelle le liquide est rabattu
-  const CONDUCT=0.15;               // conduction thermique entre particules — modérée → un gradient vertical net (fond chaud) se maintient, source des bulles
-  const T_CRITICAL=0.50;           // seuil critique : au-delà, le liquide s'allège et vole
+  const CONDUCT=0.04;               // conduction thermique — anisotrope (voir CONDUCT_VBIAS) :
+                                    // verticale pour chauffer la colonne au-dessus des spots (elle devient
+                                    // légère et monte), horizontale faible pour garder le reste du pool froid
+  const CONDUCT_VBIAS=3.0;          // BIAIS VERTICAL de conduction (×3 sur l'axe vertical) : la chaleur
+                                    // monte dans les colonnes au-dessus des spots (elles deviennent légères et
+                                    // montent) ; elle ne s'étale presque pas latéralement (le pool reste froid)
+  const T_CRITICAL=0.52;           // seuil critique : au-delà, le liquide s'allège et vole (détachement des colonnes)
   const THERMAL_NOTEFF=0.50;       // expansion : xREST_DENSITY effectif en dessous de ce seuil
-  const THERMAL_BOOST=0.6;         // surchauffe locale → accélération nette douce vers le haut (détachement serein de bulles, sans déchirer la masse)
+  const THERMAL_BOOST=0.55;        // surchauffe locale → détachement serein de bulles (compense la dissipation)
   const RESTITUTION=0.35;          // rebond (sol/murs) — suffisant pour des éclaboussures vivantes
   const DAMPING=0.992;             // amortissement global
   const GROUND_FRICTION=0.96;      // friction au sol
-  const MAX_FALL=0.20;             // vitesse terminale de chute
-  const PART_RADIUS=0.024;         // rayon de rendu d'une particule (lisse)
+  const MAX_FALL=0.12;             // vitesse terminale de chute — basse → rythme langoureux (montée ET descente lentes)
+  const PART_RADIUS=0.026;         // rayon de rendu d'une particule (lisse)
+  // --- Graine de Rayleigh-Taylor : perturbation douce de l'interface (colonnes espacées) ---
+  const RT_SEED=0.008;             // amplitude de la graine (décalage latéral) — pool large & bas → colonnes régulières sur toute la largeur
+  const RT_FREQ=22.0;              // fréquence spatiale → espacement des colonnes ≈ 2π/RT_FREQ
+  // --- Traînée de Stokes : le blob compact glisse, le petit traîne (v ∝ r²) ---
+  const DRAG_RATE=0.35;            // traînée de base (s⁻¹)
+  const DRAG_AMB=1.5;              // surcroît de traînée quand peu de voisins (petits blobs → lents)
+  const DRAG_NB=10;                // voisins de référence
+  // --- Plateau-Rayleigh : pincement des brins verticaux fins en gouttes ---
+  const PR_LATERAL_MAX=3;          // un "brin" : peu de voisins latéraux
+  const PR_VERTICAL_MIN=2;         // mais assez de voisins au-dessus/en dessous
+  // Fracture du cou (rupture du film) :
+  const PR_SNAP=0.05;              // ouverture latérale du cou après PBD (survit à la relaxation) — douce : les gouttes se détachent lentement, sans éclabousser
+  const PR_BANDS=24;               // tranches horizontales pour détecter le cou
+  const PR_MIN_OCC=4;              // particules min. par tranche candidate
+  const PR_MAX_NECK=0.10;          // largeur max. du cou pour déclencher la fracture
+  const PR_FRAC_TOL=0.05;          // demi-épaisseur du plan de fracture autour du cou
+  const PR_LATCH=120;              // verrouillage (en pas) : la fracture reste active après la détection
   // La suppression du flick/rollback est faite par RÉCONCILIATION PBD (voir plus bas) :
   // on recale la vitesse sur le déplacement réel après la relaxation de pression.
   // Plus de besoin de couche d'amortissement qui étouffait l'éclaboussure et les bulles.
 
   let aspect=1;
+  let simTime=0;                   // horloge du simulateur (phase de la graine RT)
+  let neckY=-1;                    // altitude du cou de colonne détecté (fracture Plateau-Rayleigh), -1 = aucun
+  let neckLatch=0;                 // verrouillage : la fracture reste active après la dernière détection
   const P=[];                      // particules {x,y,vx,vy,px,py,temp,r}
 
   function initParticles(){
-    const cx=aspect*0.5, cy=0.78, R=0.20, s=0.020;
+    // Pool de cire compact posé sur la plaque (le "gros bloc") : dôme ellipsoïdal étroit,
+    // comme la masse de cire d'une vraie lampe (~15 % de la largeur de chaque côté).
+    // Pool de cire PLEINE LARGEUR : dôme large et bas posé sur la plaque (~94 % de l'écran),
+    // assez épais pour garder de la matière au sol. La lave occupe tout l'écran.
+    const cx=aspect*0.5, s=0.020, floorY=0.02, topY=0.20, halfW=aspect*0.47;
     P.length=0;
-    const rows=Math.ceil((R*2)/(s*0.866))+2;
-    for(let row=-rows;row<=rows;row++){
-      const y=cy+row*s*0.866;
+    const rows=Math.ceil((topY-floorY)/(s*0.80));
+    for(let row=0;row<rows&&P.length<N;row++){
+      const y=floorY+row*s*0.80;
+      const dy=(y-floorY)/(topY-floorY);
+      const rw=Math.sqrt(Math.max(0,1-dy*dy));
       const off=(row&1)?s*0.5:0;
-      for(let col=-rows;col<=rows;col++){
+      const cols=Math.floor((rw*halfW)/s);
+      for(let col=-cols;col<=cols&&P.length<N;col++){
         const x=cx+col*s+off;
-        const dx=x-cx, dy=y-cy;
-        if(dx*dx+dy*dy<=R*R && P.length<N){
-          P.push({x,y,vx:0,vy:0,px:x,py:y,temp:0.25,r:PART_RADIUS});
+        if(x>s&&x<aspect-s){
+          P.push({x,y,vx:0,vy:0,px:x,py:y,temp:0.18,r:PART_RADIUS}); // cire froide au chargement → la préchauffe est visible
         }
       }
     }
@@ -270,19 +313,27 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const density=new Float32Array(N), nearDensity=new Float32Array(N);
   const pressure=new Float32Array(N);
   const dispX=new Float32Array(N), dispY=new Float32Array(N);
+  const nbC=new Float32Array(N), nbUp=new Float32Array(N), nbDn=new Float32Array(N);
+  const prLo=new Float32Array(32), prHi=new Float32Array(32), prCnt=new Uint16Array(32); // cou de colonne
 
   function step(h){
     const h2=H_SMOOTH*H_SMOOTH;
     const cohR=H_SMOOTH*COH_RANGE, cohR2=cohR*cohR;
 
-    // 1. Forces (gravité + poussée d'Archimède thermique + rappel piège) + intégration
+    // 1. Forces (gravité + poussée d'Archimède thermique + rappel plafond) + intégration
     for(let i=0;i<P.length;i++){
       const p=P[i];
       // Poussée d'Archimède + expansion critique : le chaud devient léger et monte
       const boost=p.temp>T_CRITICAL?THERMAL_BOOST*(p.temp-T_CRITICAL)/(1.0-T_CRITICAL):0.0;
       p.vy+=(-GRAVITY + BUOYANCY*(p.temp-0.5) + boost)*h;
+      // Graine de Rayleigh-Taylor : décalage latéral périodique doux → colonnes espacées
+      p.vx+=RT_SEED*Math.sin(p.x*RT_FREQ+simTime*0.4)*h;
       // Rappel gravitaire : les gouttes trop hautes retombent (ferme le cycle, pas de plafond)
       if(p.y>CEIL_Z){p.vy-=(p.y-CEIL_Z)*CEIL_RECALL*h;}
+      // Traînée de Stokes (nb = voisins du pas précédent) : un blob compact glisse vite,
+      // un petit blob traîne → le gros rattrape le petit → coalescence émergente
+      const drag=DRAG_RATE*(1.0+DRAG_AMB*Math.max(0,DRAG_NB-nbC[i])/DRAG_NB);
+      p.vx*=Math.max(0,1-drag*h); p.vy*=Math.max(0,1-drag*h);
       p.vx*=DAMPING; p.vy*=DAMPING;
       if(p.vy<-MAX_FALL)p.vy=-MAX_FALL;
       if(p.vy>MAX_FALL)p.vy=MAX_FALL;
@@ -291,6 +342,33 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       p.px=p.x; p.py=p.y;
       p.x+=p.vx*h; p.y+=p.vy*h;
     }
+    simTime+=h;
+
+    // 1b. Détection du COU de colonne (Plateau-Rayleigh macroscopique) : la tranche la plus
+    //     étroite au-dessus du pool, avec du matériau en dessous (pool) ET au-dessus (tête).
+    //     Verrouillage : une fois détecté, le cou reste actif PR_LATCH pas → la fracture a le
+    //     temps de séparer complètement la tête (évite le clignotement ouvert/fermé).
+    let newNeck=-1;
+    for(let b=0;b<PR_BANDS;b++){prLo[b]=1e9;prHi[b]=-1e9;prCnt[b]=0;}
+    for(let i=0;i<P.length;i++){
+      const p=P[i];
+      const b=Math.min(PR_BANDS-1,Math.max(0,Math.floor(p.y*PR_BANDS)));
+      prCnt[b]++;
+      if(p.x<prLo[b])prLo[b]=p.x;
+      if(p.x>prHi[b])prHi[b]=p.x;
+    }
+    const poolB=Math.floor(0.18*PR_BANDS);
+    let bestW=1e9;
+    for(let b=poolB+1;b<PR_BANDS-1;b++){
+      if(prCnt[b]<PR_MIN_OCC)continue;
+      const w=prHi[b]-prLo[b];
+      const belowW=(prCnt[b-1]>=PR_MIN_OCC)?(prHi[b-1]-prLo[b-1]):1e9;
+      const headW=(prCnt[b+1]>=PR_MIN_OCC)?(prHi[b+1]-prLo[b+1]):1e9;
+      if(w<bestW && belowW>w*2 && headW>w*1.2 && w<PR_MAX_NECK){bestW=w;newNeck=(b+0.5)/PR_BANDS;}
+    }
+    if(newNeck>=0){neckY=newNeck;neckLatch=PR_LATCH;}
+    else if(neckLatch>0){neckLatch--;}
+    else{neckY=-1;}
 
     // 2. Cohésion (tension de surface) : attire les particules proches
     for(let i=0;i<P.length;i++){
@@ -309,7 +387,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     }
 
     // 3. Densités (noyau (1-q)^2 et (1-q)^3)
-    for(let i=0;i<P.length;i++){density[i]=0;nearDensity[i]=0;}
+    for(let i=0;i<P.length;i++){density[i]=0;nearDensity[i]=0;nbC[i]=0;nbUp[i]=0;nbDn[i]=0;}
     for(let i=0;i<P.length;i++){
       for(let j=i+1;j<P.length;j++){
         const a=P[i], b=P[j];
@@ -322,6 +400,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
         density[i]+=aq2; density[j]+=aq2;
         const aq3=aq2*aq;
         nearDensity[i]+=aq3; nearDensity[j]+=aq3;
+        nbC[i]++; nbC[j]++;
+        if(b.y>a.y){nbUp[i]++; nbDn[j]++;}
+        else{nbDn[i]++; nbUp[j]++;}
       }
     }
 
@@ -345,6 +426,13 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
           const r=Math.sqrt(r2)||1e-6;
           const q=r/H_SMOOTH, aq=1-q;
           const nx=dx/r, ny=dy/r;
+          // Fracture Plateau-Rayleigh : si un cou de colonne est détecté, on coupe
+          // l'interaction (pression + tension) entre les particules de part et d'autre
+          // du plan du cou → le "film" casse, la colonne se sépare en deux.
+          if(neckY>=0){
+            const ay=a.y-neckY, by=b.y-neckY;
+            if(ay*by<0 && Math.abs(ay)<PR_FRAC_TOL+0.06 && Math.abs(by)<PR_FRAC_TOL+0.06)continue;
+          }
           // j pousse i ; i pousse j
           const near_i=aq*aq*K_NEAR*nearDensity[i];
           const near_j=aq*aq*K_NEAR*nearDensity[j];
@@ -372,6 +460,22 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       p.vx=(p.x-p.px)/h; p.vy=(p.y-p.py)/h;
       if(p.vy<-MAX_FALL)p.vy=-MAX_FALL; if(p.vy>MAX_FALL)p.vy=MAX_FALL;
       if(p.vx>MAX_FALL)p.vx=MAX_FALL; if(p.vx<-MAX_FALL)p.vx=-MAX_FALL;
+    }
+
+    // 5c. Ouverture active du cou : après la réconciliation (donc non effacée), on pousse
+    //     latéralement les particules du plan du cou (gauche à gauche, droite à droite) + on
+    //     soulève la tête → le cou s'ouvre et la goutte se détache.
+    if(neckY>=0){
+      const cx=(prLo[Math.floor(neckY*PR_BANDS)]+prHi[Math.floor(neckY*PR_BANDS)])/2;
+      for(let i=0;i<P.length;i++){
+        const p=P[i];
+        const dy=Math.abs(p.y-neckY);
+        if(dy<PR_FRAC_TOL){
+          p.vx+=(p.x<cx?-1:1)*PR_SNAP*h;
+        } else if(p.y>neckY+PR_FRAC_TOL && p.y<0.75){
+          p.vy-=PR_SNAP*0.5*h;
+        }
+      }
     }
 
     // 6. Viscosité (XSPH) : lissage des vitesses entre voisins
@@ -406,26 +510,40 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     //    RELAXATION vers le froid (proportionnel à T). Ce couplage fond-chaud / sommet-froid
     //    maintient un gradient vertical STABLE : la cire chaude (plus légère) monte,
     //    se densifie en altitude (passe sous la densité de croisement ~0.5) et redescend.
+    // Préchauffe progressive au chargement : la plaque monte de 0 → pleine puissance
+    // sur WARMUP s (courbe smoothstep) → la lave démarre froide et chauffe petit à petit.
+    const ramp=Math.min(1,simTime/WARMUP), heatRamp=ramp*ramp*(3-2*ramp);
+    // Positions des spots de chauffe (brûleurs discrets) espacés sur la largeur.
+    const burnerX=[];
+    for(let b=0;b<BURNERS;b++){burnerX.push((b+1)*aspect/(BURNERS+1));}
     for(let i=0;i<P.length;i++){
       const p=P[i];
       const depth=p.y; // y=0 = le fond (plaque chauffante)
       if(depth<HEAT_THICK){
-        // Plaque : chauffe maximale et très localisée au contact immédiat → vers le chaud
-        p.temp+=HEAT_RATE*(1.0-depth/HEAT_THICK)*3.0*h;
+        // Chauffe par spots : chaque particule chauffe selon sa proximité au brûleur le plus proche
+        // (gaussienne étroite). Les zones entre les spots restent froides → le pool est ancré.
+        let nearest=1e9;
+        for(let b=0;b<BURNERS;b++){const d=Math.abs(p.x-burnerX[b]); if(d<nearest)nearest=d;}
+        const spot=Math.exp(-(nearest*nearest)/(0.10*0.10)); // largeur du spot ≈ 10% de la largeur
+        p.temp+=HEAT_RATE*(1.0-depth/HEAT_THICK)*4.0*h*heatRamp*spot;
       }
       // Refroidissement par relaxation vers le froid (stable, pas de saignée constante)
       p.temp-=COOL_RATE*p.temp*h;                                     // ambiant partout
       if(p.y>COOL_TOP_Z){p.temp-=COOL_TOP*(p.y-COOL_TOP_Z)*p.temp*h;} // fort en altitude → redensifie la cire montée
       p.temp=clamp(p.temp,0,1);
     }
-    // Conduction : propage la chaleur depuis la plaque vers le haut (gradient)
+    // Conduction ANISOTROPE : forte sur l'axe vertical (la colonne au-dessus des spots
+    // chauffe et devient légère → monte), faible sur l'axe horizontal (le pool reste froid
+    // et ancré). La chaleur monte par conduction dans les colonnes, pas latéralement.
     for(let i=0;i<P.length;i++){
       for(let j=i+1;j<P.length;j++){
         const a=P[i], b=P[j];
         const dx=b.x-a.x, dy=b.y-a.y;
         const r2=dx*dx+dy*dy;
         if(r2>=h2)continue;
-        const transfer=CONDUCT*(b.temp-a.temp)*h;
+        const r=Math.sqrt(r2)||1e-6;
+        const vert=Math.abs(dy)/r;                    // 1 = voisin au-dessus/en-dessous, 0 = latéral
+        const transfer=CONDUCT*(1.0+(CONDUCT_VBIAS-1.0)*vert)*(b.temp-a.temp)*h;
         a.temp+=transfer; b.temp-=transfer;
       }
     }
@@ -448,83 +566,145 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     return {p,u};
   }
 
-  // --- Pass 1 : splat par points ---
+  // --- Pass 1 : champ de densité (métaballe) : les particules splattent leur densité
+  //              + température dans une texture basse résolution ---
   const splatVS=`#version 300 es
     in vec2 aPos; in float aTemp;
-    uniform vec2 uRes;
-    uniform float uScale;   // échelle du canvas (DPR × qualité) : garde les blobs à la même taille à l'écran
+    uniform vec2 uRes;          // résolution de la TEXTURE de densité
+    uniform float uAspect;      // aspect monde (x ∈ [0,aspect])
     out float vTemp;
     void main(){
       vTemp=aTemp;
-      float aspect=uRes.x/uRes.y;
-      vec2 ndc=vec2((aPos.x-aspect*0.5)/aspect*2.0, aPos.y*2.0-1.0);
+      // y=0 (sol) → bas de la texture ; x ∈ [0,aspect] → [0,1]
+      vec2 ndc=vec2(aPos.x/uAspect*2.0-1.0, aPos.y*2.0-1.0);
       gl_Position=vec4(ndc,0.0,1.0);
-      gl_PointSize=90.0*uScale;   // points encore plus petits → liseré net, blur minimal
+      gl_PointSize=41.0;        // splat redimensionné pour la texture haute résolution (512×320) :
+                                // même couverture monde qu'avant → bords d'iso-surface plus nets
     }`;
   const splatFS=`#version 300 es
     precision highp float;
-    uniform vec2 uRes;
     in float vTemp;
     out vec4 outColor;
-    vec3 tempToColor(float t){
-      t=clamp(t,0.0,1.0);
-      // Palette froide et désaturée : bleus profonds dominants, accents chauds très discrets (température réduite)
-      vec3 c0=vec3(0.06,0.13,0.34);   // bleu nuit profond
-      vec3 c1=vec3(0.14,0.29,0.58);   // bleu glacier
-      vec3 c2=vec3(0.30,0.34,0.62);   // pervenche douce
-      vec3 c3=vec3(0.46,0.36,0.52);   // mauve discret
-      vec3 c4=vec3(0.60,0.47,0.40);   // ambre doux
-      vec3 c5=vec3(0.68,0.64,0.58);   // blanc cassé chaud
-      // Rampes plus nombreuses + intervalles réguliers → transitions lisses
-      if(t<0.25)return mix(c0,c1,t/0.25);
-      if(t<0.50)return mix(c1,c2,(t-0.25)/0.25);
-      if(t<0.72)return mix(c2,c3,(t-0.50)/0.22);
-      if(t<0.88)return mix(c3,c4,(t-0.72)/0.16);
-      return mix(c4,c5,(t-0.88)/0.12);
-    }
     void main(){
       vec2 uv=gl_PointCoord*2.0-1.0;
       float d=length(uv);
-      float w=exp(-d*d*6.0);    // chute gaussienne très raide → blobs nets, peu de blur
-      float a=w*0.6;            // opacité par particule — le cœur multi-splat converge vers la couleur, pas vers le blanc
-      vec3 col=tempToColor(vTemp);
-      outColor=vec4(col*a, a); // prémultiplié → compositing additif normalisé
+      float w=exp(-d*d*4.0);   // gaussienne large → champ de densité lisse
+      w*=0.19;                  // NORMALISATION : le pool dense (~15 particules/texel) atteint
+                                // R≈0.9-1.0 sans saturer brutalement → le ratio G/R reste la vraie
+                                // température (sinon R et G saturent à 1.0 → blanc partout)
+      outColor=vec4(w, w*vTemp, 0.0, 0.0);  // R=densité, G=densité×température (somme pondérée), A=0
+                                              // (le canal A est réservé à la température MAX, passe suivante)
     }`;
-  const splat=makeProg(splatVS,splatFS,['uRes','uScale']);
+  // Passe température : splatte la TEMPÉRATURE MAX (blend MAX) dans le canal A — les points
+  // chauds des colonnes restent visibles même sous un pool dense.
+  const splatTempFS=`#version 300 es
+    precision highp float;
+    in float vTemp;
+    out vec4 outColor;
+    void main(){
+      vec2 uv=gl_PointCoord*2.0-1.0;
+      float d=length(uv);
+      float w=exp(-d*d*4.0);
+      w*=0.19;                 // même normalisation que la passe densité
+      outColor=vec4(0.0, 0.0, 0.0, vTemp); // A=température max
+    }`;
+  const splat=makeProg(splatVS,splatFS,['uRes','uAspect']);
+  const splatTemp=makeProg(splatVS,splatTempFS,['uRes','uAspect']);
 
-  // --- Pass 2 : fond + vignette ---
+  // --- Pass 2 : iso-surface (seuil de densité) + fond ---
   const compVS=`#version 300 es
     in vec2 aPos;
     void main(){gl_Position=vec4(aPos,0.0,1.0);}`;
   const compFS=`#version 300 es
     precision highp float;
-    uniform vec2 uRes;
+    uniform vec2 uRes;         // résolution écran
+    uniform sampler2D uDens;   // champ de densité
+    uniform vec2 uDensSize;    // taille de la texture de densité
     out vec4 outColor;
+    vec3 tempToColor(float t){
+      t=clamp(t,0.0,1.0);
+      // Palette à la CHARTE GRAPHIQUE du site (glacier → cramoisi), ÉTALÉE et SATURÉE pour
+      // que chaque variation de température soit clairement visible (pas de blanc précoce,
+      // pas de zone grise) :
+      // bleu nuit → glacier → teal → pervenche → cramoisi → rose → blanc rosé (pic extrême)
+      vec3 c0=vec3(0.03,0.07,0.16);   // bleu nuit profond (fond / cire froide)
+      vec3 c1=vec3(0.22,0.42,0.62);   // glacier foncé
+      vec3 c2=vec3(0.31,0.55,0.72);   // glacier    #4f8db8 (--blue)
+      vec3 c3=vec3(0.45,0.74,0.80);   // teal       #74bccb (--cyan)
+      vec3 c4=vec3(0.55,0.59,0.74);   // pervenche  #8d97bc (--purple)
+      vec3 c5=vec3(0.72,0.20,0.36);   // cramoisi   #b32247 (--crimson) — saturation renforcée
+      vec3 c6=vec3(0.88,0.40,0.58);   // rose       #d96d9a (--rose)
+      vec3 c7=vec3(1.00,0.86,0.88);   // blanc rosé lumineux (point le plus chaud, rare)
+      // Segment cramoisi/rose élargi : le pool tiède (0.5-0.75) est déjà dans les rouges,
+      // les colonnes chaudes (0.75-1.0) passent par rose → blanc rosé.
+      if(t<0.12)return mix(c0,c1,t/0.12);
+      if(t<0.28)return mix(c1,c2,(t-0.12)/0.16);
+      if(t<0.44)return mix(c2,c3,(t-0.28)/0.16);
+      if(t<0.58)return mix(c3,c4,(t-0.44)/0.14);
+      if(t<0.72)return mix(c4,c5,(t-0.58)/0.14);
+      if(t<0.88)return mix(c5,c6,(t-0.72)/0.16);
+      return mix(c6,c7,(t-0.88)/0.12);
+    }
     void main(){
       vec2 uv=gl_FragCoord.xy/uRes;
+      // fond bleu nuit + vignette
       vec2 px=uv*2.0-1.0; px.x*=uRes.x/uRes.y;
       float cd=length(px);
       vec3 bg=mix(vec3(0.012,0.016,0.040),vec3(0.0,0.0,0.010),clamp(uv.y,0.0,1.0));
       bg+=vec3(0.04,0.07,0.12)*(1.0-smoothstep(0.0,0.85,cd))*0.4;
       float vig=1.0-smoothstep(0.35,1.4,cd);
       bg*=mix(0.80,1.0,vig);
-      outColor=vec4(bg,1.0);
+      // échantillonnage du champ de densité
+      vec4 dtex=texture(uDens, uv);
+      float dens=dtex.r;
+      float tAvg=dens>1e-4?(dtex.g/dtex.r):0.0;   // moyenne pondérée (corps du pool)
+      float tMax=dtex.a;                           // température max (colonnes chaudes)
+      // Fusion : corps du pool → moyenne (sa vraie couleur) ; zones peu denses (colonnes,
+      // gouttes) → le max ressort (chaud visible même dilué par le splat).
+      float blendHot=smoothstep(0.55, 0.18, dens); // 1 quand densité faible (colonnes)
+      float t=mix(tAvg, tMax, blendHot);
+      // ISO-SURFACE : seuil de densité → forme pleine, bords adoucis
+      // (texture RGBA8 → valeurs normalisées 0-1 ; la densité du pool sature vers 1.0)
+      float iso=0.35;               // seuil de densité (0-1) — pour la densité normalisée :
+                                    // les zones denses (pool, blobs) passent le seuil
+      float soft=0.35;              // largeur d'adoucissement du bord
+      float surf=smoothstep(iso, iso+soft, dens);
+      vec3 col=tempToColor(t);
+      // lueur chaude sous la surface (transitions de température)
+      vec3 outCol=bg;
+      if(surf>0.0){
+        outCol=mix(bg, col, surf);
+        // léger éclat au bord (ambient)
+        outCol+=vec3(0.09,0.03,0.06)*surf;   // lueur rose/cramoisi (charte)
+      }
+      outColor=vec4(outCol,1.0);
     }`;
-  const comp=makeProg(compVS,compFS,['uRes']);
+  const comp=makeProg(compVS,compFS,['uRes','uDens','uDensSize']);
 
-  // --- Rendu mono-passe sans FBO : fond plein écran + splat de points ---
-  const SPLAT_SCALE=1.0;
-  // Triangle plein écran pour le fond (composite)
+  // --- Rendu métaballe 2 passes : champ de densité (FBO basse résolution) + iso-surface ---
   const fullTri=gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER,fullTri);
   gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
   // VBO points (interleaved x,y,temp)
   const ptVBO=gl.createBuffer();
   const ptArr=new Float32Array(RENDER_MAX*3);
-  // attributs : splat (x,y,temp) + compos (fullscreen triangle)
   const splatPosLoc=gl.getAttribLocation(splat.p,'aPos');
   const splatTempLoc=gl.getAttribLocation(splat.p,'aTemp');
   const compPosLoc=gl.getAttribLocation(comp.p,'aPos');
+
+  // FBO + texture de densité (basse résolution, RGBA8 portable)
+  const DENS_W=512, DENS_H=320;  // texture de densité HAUTE résolution → qualité augmentée (bords nets, lissage fin)
+  const densTex=gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D,densTex);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,DENS_W,DENS_H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+  const densFBO=gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER,densFBO);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,densTex,0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
 
   function render(){
     const n=Math.min(P.length,RENDER_MAX);
@@ -532,23 +712,18 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       const p=P[i];
       ptArr[i*3]=p.x; ptArr[i*3+1]=p.y; ptArr[i*3+2]=p.temp;
     }
-    // 1. Fond plein écran (opaque)
-    gl.viewport(0,0,canvas.width,canvas.height);
+
+    // ---- Passe 1a : densité (additive) dans la texture basse résolution ----
+    gl.bindFramebuffer(gl.FRAMEBUFFER,densFBO);
+    gl.viewport(0,0,DENS_W,DENS_H);
     gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.BLEND);
-    gl.useProgram(comp.p);
-    gl.bindBuffer(gl.ARRAY_BUFFER,fullTri);
-    gl.enableVertexAttribArray(compPosLoc);
-    gl.vertexAttribPointer(compPosLoc,2,gl.FLOAT,false,0,0);
-    gl.drawArrays(gl.TRIANGLES,0,3);
-    // 2. Splat des particules (compositing additif normalisé)
-    //    alpha-over prémultiplié : le cœur multi-splat reste coloré (bleu), pas blanc,
-    //    les bords (1 splat) restent translucides. Évite la saturation RGB→blanc de l'additif pur.
+    gl.clearColor(0,0,0,1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+    gl.blendFunc(gl.ONE,gl.ONE);   // accumulation additive
     gl.useProgram(splat.p);
-    gl.uniform2f(splat.u.uRes,canvas.width,canvas.height);
-    gl.uniform1f(splat.u.uScale,canvas.width/Math.max(1,W));
+    gl.uniform2f(splat.u.uRes,DENS_W,DENS_H);
+    gl.uniform1f(splat.u.uAspect,aspect);
     gl.bindBuffer(gl.ARRAY_BUFFER,ptVBO);
     gl.bufferData(gl.ARRAY_BUFFER,ptArr,gl.DYNAMIC_DRAW);
     gl.enableVertexAttribArray(splatPosLoc);
@@ -556,7 +731,37 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     gl.enableVertexAttribArray(splatTempLoc);
     gl.vertexAttribPointer(splatTempLoc,1,gl.FLOAT,false,12,8);
     gl.drawArrays(gl.POINTS,0,n);
+
+    // ---- Passe 1b : température MAX (blend MAX) — les points chauds restent visibles ----
+    gl.blendEquation(gl.MAX);
+    gl.blendFunc(gl.ONE,gl.ONE);
+    gl.useProgram(splatTemp.p);
+    gl.uniform2f(splatTemp.u.uRes,DENS_W,DENS_H);
+    gl.uniform1f(splatTemp.u.uAspect,aspect);
+    gl.enableVertexAttribArray(splatPosLoc);
+    gl.vertexAttribPointer(splatPosLoc,2,gl.FLOAT,false,12,0);
+    gl.enableVertexAttribArray(splatTempLoc);
+    gl.vertexAttribPointer(splatTempLoc,1,gl.FLOAT,false,12,8);
+    gl.drawArrays(gl.POINTS,0,n);
+    gl.blendEquation(gl.FUNC_ADD);
+
+    // ---- Passe 2 : iso-surface sur le champ de densité + fond ----
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    gl.viewport(0,0,canvas.width,canvas.height);
     gl.disable(gl.BLEND);
+    gl.useProgram(comp.p);
+    gl.uniform2f(comp.u.uRes,canvas.width,canvas.height);
+    gl.uniform2f(comp.u.uDensSize,DENS_W,DENS_H);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D,densTex);
+    gl.uniform1i(comp.u.uDens,0);
+    gl.bindBuffer(gl.ARRAY_BUFFER,fullTri);
+    gl.enableVertexAttribArray(compPosLoc);
+    gl.vertexAttribPointer(compPosLoc,2,gl.FLOAT,false,0,0);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+
+    // restore default blend
+    gl.blendEquation(gl.FUNC_ADD);
   }
   function resize(){
     W=Math.max(1,innerWidth);H=Math.max(1,innerHeight);
@@ -564,9 +769,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     const newAspect=clamp(W/H,0.4,3.0);
     if(!P.length){aspect=newAspect;initParticles();}
     else{const k=newAspect/aspect;for(let i=0;i<P.length;i++){P[i].x*=k;P[i].px*=k;}aspect=newAspect;}
-    // Résolution du canvas : pleine résolution (DPR×1) sur GPU réel pour une image nette,
-    // résolution adaptée sur rendu logiciel (SwiftShader/llvmpipe) pour garder l'animation fluide.
-    const base=softwareRenderer?0.5:1;   // GPU réel : 1:1 → net ; logiciel : 0.5 → fluide
+    // Résolution du canvas : rendu en basse résolution + upscale CSS → chaque splat couvre
+    // plus de pixels → surface lisse et continue (masque le grain des particules SPH).
+    const base=0.85;                 // qualité de rendu AUGMENTÉE (canvas proche de la résolution écran, lissage par la texture)
     const quality=scrolling?Math.min(0.8,base):base;
     canvas.width=Math.max(1,Math.round(W*DPR*quality));
     canvas.height=Math.max(1,Math.round(H*DPR*quality));
@@ -609,7 +814,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   }
 
   // Hook de debug (test visuel / fast-forward)
-  window.__lava={step,render,P,get aspect(){return aspect;},get N(){return N;}};
+  window.__lava={step,render,P,neckY:()=>neckY,get aspect(){return aspect;},get N(){return N;},
+    // debug : expose la texture de densité pour mesurer la saturation
+    _densTex:densTex,_densW:DENS_W,_densH:DENS_H};
 
   try{
     gl.clearColor(0,0,0,1);resize();render();

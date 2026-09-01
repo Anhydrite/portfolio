@@ -40,7 +40,7 @@ body{margin:0;color:var(--txt);font-family:var(--sans);background:#000;line-heig
 #lava-bg.is-fallback .lava-fallback{display:block}
 body>.hero,body>.marquee,body>section,body>.footer{position:relative;z-index:1}
 /* Voile sombre permanent au-dessus de la lave : le contenu reste lisible partout */
-#lava-bg::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:linear-gradient(180deg,rgba(2,4,10,.20) 0%,rgba(2,4,10,.12) 45%,rgba(2,4,10,.38) 80%,rgba(2,4,10,.62) 100%)}
+#lava-bg::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:linear-gradient(180deg,rgba(2,4,10,.14) 0%,rgba(2,4,10,.08) 45%,rgba(2,4,10,.22) 80%,rgba(2,4,10,.40) 100%)}
 
 ::selection{background:rgba(93,159,201,.3)}
 a{color:inherit;text-decoration:none}
