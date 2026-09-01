@@ -67,25 +67,27 @@ async function initSig(){
   const fam=ok?'ZapfinoForteLTPro':'cursive';
   const txt='Robin';let active=false;
   function draw(){
-    const w=760,h=200;sigCtx.clearRect(0,0,w,h);sigCtx.font='128px '+fam;sigCtx.textBaseline='alphabetic';
-    let sz=128,tw=sigCtx.measureText(txt).width;
-    while(tw>w-46&&sz>52){sz*=.94;sigCtx.font=sz+'px '+fam;tw=sigCtx.measureText(txt).width;}
-    const y=h-38,gap=10;const L=[];
+    const w=760,h=200;sigCtx.clearRect(0,0,w,h);sigCtx.font='120px '+fam;sigCtx.textBaseline='alphabetic';
+    let sz=120,tw=sigCtx.measureText(txt).width;
+    while(tw>w-46&&sz>48){sz*=.94;sigCtx.font=sz+'px '+fam;tw=sigCtx.measureText(txt).width;}
+    const y=h-36,gap=8;const L=[];
     txt.split('').forEach(c=>L.push({c,x:0,y,wd:sigCtx.measureText(c).width}));
     let x=(w-L.reduce((a,l)=>a+l.wd+gap,0)+gap)/2;
     L.forEach(l=>{l.x=x;x+=l.wd+gap;});
-    sigCtx.lineWidth=2;sigCtx.lineCap='round';sigCtx.strokeStyle='#ffffff';
-    if(REDUCED_MOTION){sigCtx.setLineDash([]);L.forEach(l=>sigCtx.strokeText(l.c,l.x,l.y));return;}
-    let li=0,brush=600;
+    // Rendu plein (fillText) : lettres pleines et lisses, sans liseré ni cassure
+    sigCtx.fillStyle='#ffffff';sigCtx.textAlign='left';
+    if(REDUCED_MOTION){L.forEach(l=>sigCtx.fillText(l.c,l.x,l.y));return;}
+    // Apparition lettre par lettre avec fondu (chaque lettre est redessinée pendant son fade)
+    let li=0,alpha=0;
     (function go(){
       const L2=L[li];
-      sigCtx.setLineDash([brush,brush-6]);
-      sigCtx.clearRect(L2.x-4,L2.y-150,L2.wd+8,170);
-      sigCtx.strokeText(L2.c,L2.x,L2.y);
-      brush-=6;
-      if(brush>0){requestAnimationFrame(go);}
-      else{sigCtx.setLineDash([]);sigCtx.clearRect(L2.x-4,L2.y-150,L2.wd+8,170);sigCtx.strokeText(L2.c,L2.x,L2.y);
-        li++;if(li<L.length){brush=600;requestAnimationFrame(go);}}
+      alpha=Math.min(1,alpha+0.12);
+      sigCtx.clearRect(L2.x-6,L2.y-150,L2.wd+16,176);
+      sigCtx.globalAlpha=alpha;
+      sigCtx.fillText(L2.c,L2.x,L2.y);
+      sigCtx.globalAlpha=1;
+      if(alpha<1){requestAnimationFrame(go);}
+      else{li++;alpha=0;if(li<L.length){requestAnimationFrame(go);}}
     })();
   }
   const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting&&!active){active=true;io.disconnect();draw();}});},{threshold:.3});
@@ -195,7 +197,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   st.forEach(s=>io.observe(s.el));
 })();
 
-/* ---- Fond lampe à lave : métaballes calculées par le GPU (WebGL) ---- */
+/* ---- Fond lampe à lave : fluide SPH (mécanique des fluides réelle) ---- */
 (function initLava(){
   const host=document.getElementById('lava-bg'),canvas=document.getElementById('lava-canvas');
   if(!host||!canvas)return;
@@ -206,164 +208,410 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const renderer=rendererInfo?gl.getParameter(rendererInfo.UNMASKED_RENDERER_WEBGL):'';
   const softwareRenderer=/swiftshader|llvmpipe|software/i.test(renderer);
 
-  let reduced=motion.matches,raf=0,last=0,time=0,W=0,H=0,DPR=1,scrolling=false,scrollTimer=0;
+  let reduced=motion.matches,raf=0,last=0,W=0,H=0,DPR=1,scrolling=false,scrollTimer=0,accumulator=0;
   const fpsValue=document.querySelector('#fps-counter strong');
   let fpsFrames=0,fpsStamp=performance.now();
-  const MAX_BLOBS=8,PHYS_SPEED=0.4,clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
-  const blobs=[
-    {x:.18,y:.28,r:.11,vx:.02,vy:.016,color:[.22,.55,.92],base:[.22,.55,.92]},
-    {x:.44,y:.66,r:.12,vx:-.018,vy:.02,color:[.30,.78,.90],base:[.30,.78,.90]},
-    {x:.66,y:.26,r:.10,vx:.016,vy:-.018,color:[.83,.16,.33],base:[.83,.16,.33]},
-    {x:.82,y:.62,r:.115,vx:-.015,vy:-.016,color:[.97,.51,.67],base:[.97,.51,.67]},
-    {x:.50,y:.14,r:.10,vx:.02,vy:.014,color:[.98,.65,.18],base:[.98,.65,.18]},
-    {x:.28,y:.82,r:.105,vx:.017,vy:-.02,color:[.52,.36,.94],base:[.52,.36,.94]},
-    {x:.76,y:.44,r:.115,vx:-.022,vy:.018,color:[.20,.30,.85],base:[.20,.30,.85]},
-    {x:.56,y:.86,r:.11,vx:-.018,vy:-.015,color:[.85,.28,.40],base:[.85,.28,.40]}
-  ];
-  const blobData=new Float32Array(MAX_BLOBS*4),colorData=new Float32Array(MAX_BLOBS*3);
-  blobs.forEach((b,i)=>colorData.set(b.color,i*3));
-  function lerp3(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
+  const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
 
-  const vertexSource=`#version 300 es
-    in vec2 aPosition;
-    void main(){gl_Position=vec4(aPosition,0.0,1.0);}`;
-  const fragmentSource=`#version 300 es
+  // ---------- Paramètres physiques (tunables) ----------
+  const MAX=640, N=540;            // capacité max + nombre de particules (physique dense)
+  const RENDER_MAX=540;            // particules rendues (toutes → surface lisse)
+  const H_SMOOTH=0.042;            // rayon d'interaction SPH (unités = hauteur d'écran)
+  const REST_DENSITY=1.6;          // densité de repos
+  const K_PRESSURE=0.18;           // raideur de pression
+  const K_NEAR=0.018;              // raideur de pression proche (tension de surface / incompressibilité) — douce
+  const VISCOSITY=0.12;            // viscosité (XSPH) — élevée → ondes amorties, surface plane
+  const COHESION=0.02;             // cohésion (tension de surface) réduite → l'eau s'étale plus librement
+  const COH_RANGE=1.30;            // portée de la cohésion (× H_SMOOTH)
+  const GRAVITY=0.40;              // gravité (unités/s²) — un peu plus faible pour ralentir la convection
+  const BUOYANCY=0.55;             // poussée d.Archimède (unités/s² par écart de température) — forte → le chaud monte vite (bulles)
+  const HEAT_RATE=0.42;            // taux de chauffe de la plaque (forte convection)
+  const HEAT_ZONE=0.30;            // (réservé) hauteur plafond de la zone de chauffe
+  const HEAT_THICK=0.10;           // épaisseur de la plaque chauffante — plus épaisse → la chaleur pénètre dans toute la masse
+  const COOL_RATE=0.004;           // refroidissement naturel faible → forte inertie thermique (l'eau garde le chaud)
+  const COOL_TOP=0.03;             // refroidissement additionnel en haut (réduit)
+  const COOL_TOP_Z=0.62;           // seuil de hauteur pour le refroidissement additionnel
+  const CEIL_RECALL=0.25;          // force de rappel vers le bas au-dessus de CEIL_Z (ferme le cycle)
+  const CEIL_Z=0.75;               // altitude au-delà de laquelle le liquide est rabattu
+  const CONDUCT=0.30;               // conduction thermique entre particules — forte → la chaleur remonte vite en bulles
+  const T_CRITICAL=0.50;           // seuil critique : au-delà, le liquide s'allège et vole
+  const THERMAL_NOTEFF=0.50;       // expansion : xREST_DENSITY effectif en dessous de ce seuil
+  const THERMAL_BOOST=1.6;         // accélération nette vers le haut des particules critiques (surchauffe locale)
+  const RESTITUTION=0.35;          // rebond (sol/murs) — suffisant pour des éclaboussures vivantes
+  const DAMPING=0.992;             // amortissement global
+  const GROUND_FRICTION=0.96;      // friction au sol
+  const MAX_FALL=0.20;             // vitesse terminale de chute
+  const PART_RADIUS=0.024;         // rayon de rendu d'une particule (lisse)
+  // La suppression du flick/rollback est faite par RÉCONCILIATION PBD (voir plus bas) :
+  // on recale la vitesse sur le déplacement réel après la relaxation de pression.
+  // Plus de besoin de couche d'amortissement qui étouffait l'éclaboussure et les bulles.
+
+  let aspect=1;
+  const P=[];                      // particules {x,y,vx,vy,px,py,temp,r}
+
+  function initParticles(){
+    const cx=aspect*0.5, cy=0.78, R=0.20, s=0.020;
+    P.length=0;
+    const rows=Math.ceil((R*2)/(s*0.866))+2;
+    for(let row=-rows;row<=rows;row++){
+      const y=cy+row*s*0.866;
+      const off=(row&1)?s*0.5:0;
+      for(let col=-rows;col<=rows;col++){
+        const x=cx+col*s+off;
+        const dx=x-cx, dy=y-cy;
+        if(dx*dx+dy*dy<=R*R && P.length<N){
+          P.push({x,y,vx:0,vy:0,px:x,py:y,temp:0.25,r:PART_RADIUS});
+        }
+      }
+    }
+  }
+
+  // ---------- Fluide SPH : double density relaxation (Clavet 2005) ----------
+  const density=new Float32Array(N), nearDensity=new Float32Array(N);
+  const pressure=new Float32Array(N);
+  const dispX=new Float32Array(N), dispY=new Float32Array(N);
+
+  function step(h){
+    const h2=H_SMOOTH*H_SMOOTH;
+    const cohR=H_SMOOTH*COH_RANGE, cohR2=cohR*cohR;
+
+    // 1. Forces (gravité + poussée d'Archimède thermique + rappel piège) + intégration
+    for(let i=0;i<P.length;i++){
+      const p=P[i];
+      // Poussée d'Archimède + expansion critique : le chaud devient léger et monte
+      const boost=p.temp>T_CRITICAL?THERMAL_BOOST*(p.temp-T_CRITICAL)/(1.0-T_CRITICAL):0.0;
+      p.vy+=(-GRAVITY + BUOYANCY*(p.temp-0.5) + boost)*h;
+      // Rappel gravitaire : les gouttes trop hautes retombent (ferme le cycle, pas de plafond)
+      if(p.y>CEIL_Z){p.vy-=(p.y-CEIL_Z)*CEIL_RECALL*h;}
+      p.vx*=DAMPING; p.vy*=DAMPING;
+      if(p.vy<-MAX_FALL)p.vy=-MAX_FALL;
+      if(p.vy>MAX_FALL)p.vy=MAX_FALL;
+      if(p.vx>MAX_FALL)p.vx=MAX_FALL;
+      if(p.vx<-MAX_FALL)p.vx=-MAX_FALL;
+      p.px=p.x; p.py=p.y;
+      p.x+=p.vx*h; p.y+=p.vy*h;
+    }
+
+    // 2. Cohésion (tension de surface) : attire les particules proches
+    for(let i=0;i<P.length;i++){
+      for(let j=i+1;j<P.length;j++){
+        const a=P[i], b=P[j];
+        const dx=b.x-a.x, dy=b.y-a.y;
+        const r2=dx*dx+dy*dy;
+        if(r2>=cohR2 || r2<1e-10)continue;
+        const r=Math.sqrt(r2);
+        const w=1-r/cohR;
+        const f=COHESION*w*h;
+        const nx=dx/r, ny=dy/r;
+        a.vx+=f*nx; a.vy+=f*ny;
+        b.vx-=f*nx; b.vy-=f*ny;
+      }
+    }
+
+    // 3. Densités (noyau (1-q)^2 et (1-q)^3)
+    for(let i=0;i<P.length;i++){density[i]=0;nearDensity[i]=0;}
+    for(let i=0;i<P.length;i++){
+      for(let j=i+1;j<P.length;j++){
+        const a=P[i], b=P[j];
+        const dx=b.x-a.x, dy=b.y-a.y;
+        const r2=dx*dx+dy*dy;
+        if(r2>=h2)continue;
+        const r=Math.sqrt(r2)||1e-6;
+        const q=r/H_SMOOTH;
+        const aq=1-q, aq2=aq*aq;
+        density[i]+=aq2; density[j]+=aq2;
+        const aq3=aq2*aq;
+        nearDensity[i]+=aq3; nearDensity[j]+=aq3;
+      }
+    }
+
+    // 4. Pression : densité de repos effective dépend de la température (expansion thermique)
+    for(let i=0;i<P.length;i++){
+      const pt=P[i].temp;
+      const restEff=REST_DENSITY*(pt>THERMAL_NOTEFF?(1.0-(pt-THERMAL_NOTEFF)*0.9):1.0);
+      pressure[i]=Math.max(0,K_PRESSURE*(density[i]-restEff));
+    }
+
+    // 5. Déplacements de pression (double density relaxation) — 2 passes stables
+    const maxDisp=0.015;
+    for(let pass=0;pass<2;pass++){
+      for(let i=0;i<P.length;i++){dispX[i]=0;dispY[i]=0;}
+      for(let i=0;i<P.length;i++){
+        for(let j=i+1;j<P.length;j++){
+          const a=P[i], b=P[j];
+          const dx=b.x-a.x, dy=b.y-a.y;
+          const r2=dx*dx+dy*dy;
+          if(r2>=h2)continue;
+          const r=Math.sqrt(r2)||1e-6;
+          const q=r/H_SMOOTH, aq=1-q;
+          const nx=dx/r, ny=dy/r;
+          // j pousse i ; i pousse j
+          const near_i=aq*aq*K_NEAR*nearDensity[i];
+          const near_j=aq*aq*K_NEAR*nearDensity[j];
+          const Di=(pressure[j]+near_j)*aq*0.5;
+          const Dj=(pressure[i]+near_i)*aq*0.5;
+          dispX[i]-=Di*nx; dispY[i]-=Di*ny;
+          dispX[j]+=Dj*nx; dispY[j]+=Dj*ny;
+        }
+      }
+      for(let i=0;i<P.length;i++){
+        let dx=dispX[i], dy=dispY[i];
+        const m=Math.sqrt(dx*dx+dy*dy);
+        const limit=pass===0?maxDisp:maxDisp*0.5;
+        if(m>limit){dx=dx/m*limit; dy=dy/m*limit;}
+        P[i].x+=dx; P[i].y+=dy;
+      }
+    }
+
+    // 5b. RÉCONCILIATION PBD : vitesse = déplacement effectif depuis le début du pas.
+    //     Élimine le flick/rollback (le fluide posé gardait une vitesse de chute que la
+    //     relaxation contraint, d'où des remontées brusques). Permet de se passer de la
+    //     couche d'amortissement au sol → l'eau descend au fond, éclabousse et forme des bulles.
+    for(let i=0;i<P.length;i++){
+      const p=P[i];
+      p.vx=(p.x-p.px)/h; p.vy=(p.y-p.py)/h;
+      if(p.vy<-MAX_FALL)p.vy=-MAX_FALL; if(p.vy>MAX_FALL)p.vy=MAX_FALL;
+      if(p.vx>MAX_FALL)p.vx=MAX_FALL; if(p.vx<-MAX_FALL)p.vx=-MAX_FALL;
+    }
+
+    // 6. Viscosité (XSPH) : lissage des vitesses entre voisins
+    for(let i=0;i<P.length;i++){
+      for(let j=i+1;j<P.length;j++){
+        const a=P[i], b=P[j];
+        const dx=b.x-a.x, dy=b.y-a.y;
+        const r2=dx*dx+dy*dy;
+        if(r2>=h2)continue;
+        const r=Math.sqrt(r2)||1e-6;
+        const q=r/H_SMOOTH;
+        const w=(1-q)*VISCOSITY*h;
+        a.vx+=w*(b.vx-a.vx); a.vy+=w*(b.vy-a.vy);
+        b.vx+=w*(a.vx-b.vx); b.vy+=w*(a.vy-b.vy);
+      }
+    }
+
+    // 7. Collisions (sol, murs, plafond) — absorbantes + friction au sol
+    for(let i=0;i<P.length;i++){
+      const p=P[i];
+      if(p.x<p.r){p.x=p.r; if(p.vx<0)p.vx=-p.vx*RESTITUTION;}
+      if(p.x>aspect-p.r){p.x=aspect-p.r; if(p.vx>0)p.vx=-p.vx*RESTITUTION;}
+      if(p.y<p.r){
+        p.y=p.r; if(p.vy<0){p.vy=-p.vy*RESTITUTION;}
+        p.vx*=GROUND_FRICTION;
+      }
+      // (plus de couche d'amortissement au sol : la réconciliation PBD gère le flick)
+      if(p.y>1-p.r){p.y=1-p.r; if(p.vy>0){p.vy=-p.vy*RESTITUTION;} p.vx*=0.90;}
+    }
+
+    // 8. Thermique : PLAQUE FINE au sol — seule la fine couche en contact avec le
+    //    fond chauffe fort et localement. Le reste du liquide ne chauffe QUE par
+    //    conduction (le gradient de température se propage du bas vers le haut).
+    for(let i=0;i<P.length;i++){
+      const p=P[i];
+      const depth=p.y; // y=0 = le fond (plaque chauffante fine)
+      if(depth<HEAT_THICK){
+        // Plaque fine : chauffe maximale et très localisée au contact immédiat
+        p.temp+=HEAT_RATE*(1.0-depth/HEAT_THICK)*3.0*h;
+      }
+      p.temp-=COOL_RATE*h; // refroidissement ambiant partout
+      if(p.y>COOL_TOP_Z){p.temp-=COOL_TOP*(p.y-COOL_TOP_Z)*h;} // + en altitude
+      p.temp=clamp(p.temp,0,1);
+    }
+    // Conduction : propage la chaleur depuis la plaque vers le haut (gradient)
+    for(let i=0;i<P.length;i++){
+      for(let j=i+1;j<P.length;j++){
+        const a=P[i], b=P[j];
+        const dx=b.x-a.x, dy=b.y-a.y;
+        const r2=dx*dx+dy*dy;
+        if(r2>=h2)continue;
+        const transfer=CONDUCT*(b.temp-a.temp)*h;
+        a.temp+=transfer; b.temp-=transfer;
+      }
+    }
+  }
+
+// =====================================================================
+  // RENDU 2D PAR SPLAT (perf : coût GPU indépendant du nombre de particules)
+  // Pass 1 : les particules sont splattées comme des POINTS gaussiens
+  //          dans une texture basse résolution (densité + température)
+  // Pass 2 : composite fullscreen O(1) → fond + dégradé thermique + lissage
+  // =====================================================================
+  function makeProg(vs,fs,names){
+    const v=gl.createShader(gl.VERTEX_SHADER);gl.shaderSource(v,vs);gl.compileShader(v);
+    if(!gl.getShaderParameter(v,gl.COMPILE_STATUS))throw Error('VS:'+gl.getShaderInfoLog(v));
+    const f=gl.createShader(gl.FRAGMENT_SHADER);gl.shaderSource(f,fs);gl.compileShader(f);
+    if(!gl.getShaderParameter(f,gl.COMPILE_STATUS))throw Error('FS:'+gl.getShaderInfoLog(f));
+    const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error('LINK:'+gl.getProgramInfoLog(p));
+    const u={};names.forEach(n=>{u[n]=gl.getUniformLocation(p,n);});
+    return {p,u};
+  }
+
+  // --- Pass 1 : splat par points ---
+  const splatVS=`#version 300 es
+    in vec2 aPos; in float aTemp;
+    uniform vec2 uRes;
+    uniform float uScale;   // échelle du canvas (DPR × qualité) : garde les blobs à la même taille à l'écran
+    out float vTemp;
+    void main(){
+      vTemp=aTemp;
+      float aspect=uRes.x/uRes.y;
+      vec2 ndc=vec2((aPos.x-aspect*0.5)/aspect*2.0, aPos.y*2.0-1.0);
+      gl_Position=vec4(ndc,0.0,1.0);
+      gl_PointSize=90.0*uScale;   // points encore plus petits → liseré net, blur minimal
+    }`;
+  const splatFS=`#version 300 es
     precision highp float;
-    uniform vec2 uResolution;
-    uniform float uTime;
-    uniform vec4 uBlobs[${MAX_BLOBS}];
-    uniform vec3 uColors[${MAX_BLOBS}];
+    uniform vec2 uRes;
+    in float vTemp;
+    out vec4 outColor;
+    vec3 tempToColor(float t){
+      t=clamp(t,0.0,1.0);
+      // Palette froide et désaturée : bleus profonds dominants, accents chauds très discrets (température réduite)
+      vec3 c0=vec3(0.06,0.13,0.34);   // bleu nuit profond
+      vec3 c1=vec3(0.14,0.29,0.58);   // bleu glacier
+      vec3 c2=vec3(0.30,0.34,0.62);   // pervenche douce
+      vec3 c3=vec3(0.46,0.36,0.52);   // mauve discret
+      vec3 c4=vec3(0.60,0.47,0.40);   // ambre doux
+      vec3 c5=vec3(0.68,0.64,0.58);   // blanc cassé chaud
+      // Rampes plus nombreuses + intervalles réguliers → transitions lisses
+      if(t<0.25)return mix(c0,c1,t/0.25);
+      if(t<0.50)return mix(c1,c2,(t-0.25)/0.25);
+      if(t<0.72)return mix(c2,c3,(t-0.50)/0.22);
+      if(t<0.88)return mix(c3,c4,(t-0.72)/0.16);
+      return mix(c4,c5,(t-0.88)/0.12);
+    }
+    void main(){
+      vec2 uv=gl_PointCoord*2.0-1.0;
+      float d=length(uv);
+      float w=exp(-d*d*6.0);    // chute gaussienne très raide → blobs nets, peu de blur
+      float a=w*0.6;            // opacité par particule — le cœur multi-splat converge vers la couleur, pas vers le blanc
+      vec3 col=tempToColor(vTemp);
+      outColor=vec4(col*a, a); // prémultiplié → compositing additif normalisé
+    }`;
+  const splat=makeProg(splatVS,splatFS,['uRes','uScale']);
+
+  // --- Pass 2 : fond + vignette ---
+  const compVS=`#version 300 es
+    in vec2 aPos;
+    void main(){gl_Position=vec4(aPos,0.0,1.0);}`;
+  const compFS=`#version 300 es
+    precision highp float;
+    uniform vec2 uRes;
     out vec4 outColor;
     void main(){
-      vec2 uv=gl_FragCoord.xy/uResolution;
-      float aspect=uResolution.x/uResolution.y;
-      // Espace isotrope : correction d'aspect pour des blobs bien ronds
-      vec2 p=vec2((uv.x-0.5)*aspect, uv.y-0.5);
-      // Fond profond : bleu nuit dégradé + halo central discret
-      vec3 bg=mix(vec3(0.016,0.022,0.055),vec3(0.0,0.0,0.012),clamp(uv.y,0.0,1.0));
-      float cd=length(p);
-      bg+=vec3(0.05,0.09,0.16)*(1.0-smoothstep(0.0,0.85,cd))*0.5;
-      float field=0.0;vec3 tint=vec3(0.0);
-      for(int i=0;i<${MAX_BLOBS};i++){
-        vec2 bc=vec2((uBlobs[i].x-0.5)*aspect, uBlobs[i].y-0.5);
-        vec2 delta=p-bc;
-        float d2=dot(delta,delta);
-        float contribution=uBlobs[i].z*uBlobs[i].z/(d2+0.006);
-        field+=contribution;tint+=uColors[i]*contribution;
-      }
-      vec3 albedo=tint/max(field,0.001);
-      // Corps compact et net
-      float body=smoothstep(0.45,0.65,field);
-      // Liseré lumineux sur le contour
-      float rim=smoothstep(0.30,0.45,field)*(1.0-smoothstep(0.65,0.85,field));
-      vec3 col=bg;
-      col+=albedo*body;
-      col+=mix(albedo,vec3(1.0),0.40)*rim*0.85;
-      // Vignette douce pour concentrer le regard au centre
+      vec2 uv=gl_FragCoord.xy/uRes;
+      vec2 px=uv*2.0-1.0; px.x*=uRes.x/uRes.y;
+      float cd=length(px);
+      vec3 bg=mix(vec3(0.012,0.016,0.040),vec3(0.0,0.0,0.010),clamp(uv.y,0.0,1.0));
+      bg+=vec3(0.04,0.07,0.12)*(1.0-smoothstep(0.0,0.85,cd))*0.4;
       float vig=1.0-smoothstep(0.35,1.4,cd);
-      col*=mix(0.80,1.0,vig);
-      outColor=vec4(min(col,vec3(1.0)),1.0);
+      bg*=mix(0.80,1.0,vig);
+      outColor=vec4(bg,1.0);
     }`;
-  function shader(type,source){
-    const result=gl.createShader(type);gl.shaderSource(result,source);gl.compileShader(result);
-    if(!gl.getShaderParameter(result,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(result));
-    return result;
-  }
-  const program=gl.createProgram();
-  gl.attachShader(program,shader(gl.VERTEX_SHADER,vertexSource));
-  gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fragmentSource));
-  gl.linkProgram(program);
-  if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));
-  const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
-  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
-  const position=gl.getAttribLocation(program,'aPosition');
-  const resolution=gl.getUniformLocation(program,'uResolution');
-  const timeLocation=gl.getUniformLocation(program,'uTime');
-  const blobsLocation=gl.getUniformLocation(program,'uBlobs[0]');
-  const colorsLocation=gl.getUniformLocation(program,'uColors[0]');
+  const comp=makeProg(compVS,compFS,['uRes']);
 
-  function resize(){
-    W=Math.max(1,innerWidth);H=Math.max(1,innerHeight);DPR=Math.min(devicePixelRatio||1,1.25);
-    const base=softwareRenderer?(innerWidth<600?.55:.4):1;
-    const quality=scrolling?Math.min(.7,base):base;
-    canvas.width=Math.max(1,Math.round(W*DPR*quality));canvas.height=Math.max(1,Math.round(H*DPR*quality));
-    gl.viewport(0,0,canvas.width,canvas.height);render();
+  // --- Rendu mono-passe sans FBO : fond plein écran + splat de points ---
+  const SPLAT_SCALE=1.0;
+  // Triangle plein écran pour le fond (composite)
+  const fullTri=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,fullTri);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  // VBO points (interleaved x,y,temp)
+  const ptVBO=gl.createBuffer();
+  const ptArr=new Float32Array(RENDER_MAX*3);
+  // attributs : splat (x,y,temp) + compos (fullscreen triangle)
+  const splatPosLoc=gl.getAttribLocation(splat.p,'aPos');
+  const splatTempLoc=gl.getAttribLocation(splat.p,'aTemp');
+  const compPosLoc=gl.getAttribLocation(comp.p,'aPos');
+
+  function render(){
+    const n=Math.min(P.length,RENDER_MAX);
+    for(let i=0;i<n;i++){
+      const p=P[i];
+      ptArr[i*3]=p.x; ptArr[i*3+1]=p.y; ptArr[i*3+2]=p.temp;
+    }
+    // 1. Fond plein écran (opaque)
+    gl.viewport(0,0,canvas.width,canvas.height);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.useProgram(comp.p);
+    gl.bindBuffer(gl.ARRAY_BUFFER,fullTri);
+    gl.enableVertexAttribArray(compPosLoc);
+    gl.vertexAttribPointer(compPosLoc,2,gl.FLOAT,false,0,0);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    // 2. Splat des particules (compositing additif normalisé)
+    //    alpha-over prémultiplié : le cœur multi-splat reste coloré (bleu), pas blanc,
+    //    les bords (1 splat) restent translucides. Évite la saturation RGB→blanc de l'additif pur.
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(splat.p);
+    gl.uniform2f(splat.u.uRes,canvas.width,canvas.height);
+    gl.uniform1f(splat.u.uScale,canvas.width/Math.max(1,W));
+    gl.bindBuffer(gl.ARRAY_BUFFER,ptVBO);
+    gl.bufferData(gl.ARRAY_BUFFER,ptArr,gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(splatPosLoc);
+    gl.vertexAttribPointer(splatPosLoc,2,gl.FLOAT,false,12,0);
+    gl.enableVertexAttribArray(splatTempLoc);
+    gl.vertexAttribPointer(splatTempLoc,1,gl.FLOAT,false,12,8);
+    gl.drawArrays(gl.POINTS,0,n);
+    gl.disable(gl.BLEND);
   }
+  function resize(){
+    W=Math.max(1,innerWidth);H=Math.max(1,innerHeight);
+    DPR=Math.min(devicePixelRatio||1,1.5);
+    const newAspect=clamp(W/H,0.4,3.0);
+    if(!P.length){aspect=newAspect;initParticles();}
+    else{const k=newAspect/aspect;for(let i=0;i<P.length;i++){P[i].x*=k;P[i].px*=k;}aspect=newAspect;}
+    // Résolution du canvas : pleine résolution (DPR×1) sur GPU réel pour une image nette,
+    // résolution adaptée sur rendu logiciel (SwiftShader/llvmpipe) pour garder l'animation fluide.
+    const base=softwareRenderer?0.5:1;   // GPU réel : 1:1 → net ; logiciel : 0.5 → fluide
+    const quality=scrolling?Math.min(0.8,base):base;
+    canvas.width=Math.max(1,Math.round(W*DPR*quality));
+    canvas.height=Math.max(1,Math.round(H*DPR*quality));
+    gl.viewport(0,0,canvas.width,canvas.height);
+    render();
+  }
+
   function onScroll(){
     if(!scrolling){scrolling=true;resize();document.documentElement.classList.add('is-scrolling');}
     clearTimeout(scrollTimer);scrollTimer=setTimeout(()=>{scrolling=false;document.documentElement.classList.remove('is-scrolling');resize();},180);
   }
-  function update(dt){
-    time+=Math.min(.05,dt)*PHYS_SPEED;
-    const steps=dt>0?Math.max(1,Math.round(dt*60)):1;
-    for(let s=0;s<steps;s++){
-      // 1. Dérive lente, quasi sans inertie : la vitesse suit directement un bruit très lent
-      blobs.forEach((b,i)=>{
-        const w1=time*0.05+i*1.7,w2=time*0.038+i*0.9;
-        b.vx=Math.sin(w1)*0.0012+Math.cos(w2)*0.001;
-        b.vy=Math.cos(w1*1.3)*0.0012+Math.sin(w2*0.8)*0.001;
-      });
-      // 2. Paires : partage du mouvement et mélange des couleurs au contact
-      for(let i=0;i<blobs.length;i++){
-        for(let j=i+1;j<blobs.length;j++){
-          const a=blobs[i],b=blobs[j];
-          const dx=b.x-a.x,dy=b.y-a.y;
-          const dist=Math.sqrt(dx*dx+dy*dy);
-          const touch=a.r+b.r;
-          if(dist<touch){
-            // Répulsion élastique : les blobs gardent leur individualité en se touchant
-            const overlap=touch-dist;
-            const push=overlap*0.25;
-            const nx=dx/(dist||1e-5),ny=dy/(dist||1e-5);
-            a.x-=nx*push*.5;a.y-=ny*push*.5;
-            b.x+=nx*push*.5;b.y+=ny*push*.5;
-            // Partage de vitesse : moyenne pondérée (les blobs voyagent ensemble)
-            const mixV=0.35*(overlap/touch);
-            const avx=(a.vx+b.vx)*.5,avy=(a.vy+b.vy)*.5;
-            a.vx=(1-mixV)*a.vx+mixV*avx;a.vy=(1-mixV)*a.vy+mixV*avy;
-            b.vx=(1-mixV)*b.vx+mixV*avx;b.vy=(1-mixV)*b.vy+mixV*avy;
-            // Partage de couleur : les deux tendent vers la moyenne
-            const blend=0.08*(overlap/touch);
-            const avg=lerp3(a.color,b.color,.5);
-            a.color=lerp3(a.color,avg,blend);
-            b.color=lerp3(b.color,avg,blend);
-          }
-        }
-      }
-      // 3. Intégration (sans amortissement : pas d'inertie à dissiper)
-      blobs.forEach(b=>{
-        b.x+=b.vx*PHYS_SPEED;b.y+=b.vy*PHYS_SPEED;
-        b.color=lerp3(b.color,b.base,0.0012);
-        if(b.x<b.r){b.x=b.r;b.vx=Math.abs(b.vx)*.7;}
-        if(b.x>1-b.r){b.x=1-b.r;b.vx=-Math.abs(b.vx)*.7;}
-        if(b.y<b.r){b.y=b.r;b.vy=Math.abs(b.vy)*.7;}
-        if(b.y>1-b.r){b.y=1-b.r;b.vy=-Math.abs(b.vy)*.7;}
-      });
-    }
-  }
-  function render(){
-    blobs.forEach((b,i)=>{blobData.set([b.x,b.y,b.r,0],i*4);colorData.set(b.color,i*3);});
-    gl.useProgram(program);gl.uniform2f(resolution,canvas.width,canvas.height);gl.uniform1f(timeLocation,time);gl.uniform4fv(blobsLocation,blobData);gl.uniform3fv(colorsLocation,colorData);
-    gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,3);
-  }
+
   function updateFps(now){
     if(!fpsValue)return;
     fpsFrames++;const elapsed=now-fpsStamp;if(elapsed<500)return;
-    const fps=Math.round(fpsFrames*1000/elapsed);fpsValue.textContent=String(fps);fpsValue.dataset.level=fps<30?'low':fps<55?'mid':'good';fpsFrames=0;fpsStamp=now;
+    const fps=Math.round(fpsFrames*1000/elapsed);
+    fpsValue.textContent=String(fps);fpsValue.dataset.level=fps<30?'low':fps<55?'mid':'good';
+    fpsFrames=0;fpsStamp=now;
   }
+
+  const FIXED=1/240;
   function frame(now){
-    raf=0;if(document.hidden||reduced)return;
-    const dt=last?Math.min(.05,(now-last)/1000):.016;last=now;update(dt);render();updateFps(now);raf=requestAnimationFrame(frame);
+    raf=0;
+    if(document.hidden||reduced)return;
+    const dt=last?Math.min(0.05,(now-last)/1000):FIXED;last=now;
+    accumulator+=dt;
+    let steps=0;
+    while(accumulator>=FIXED&&steps<12){step(FIXED);accumulator-=FIXED;steps++;}
+    if(steps===12)accumulator=0;
+    render();updateFps(now);
+    raf=requestAnimationFrame(frame);
   }
+
   function stop(){if(raf){cancelAnimationFrame(raf);raf=0;}last=0;}
-  function start(){if(!reduced&&!document.hidden&&!raf){last=0;raf=requestAnimationFrame(frame);}}
+  function start(){if(!reduced&&!document.hidden&&!raf){last=0;accumulator=0;raf=requestAnimationFrame(frame);}}
   function updateMotion(){
     reduced=motion.matches;stop();
     if(reduced){if(fpsValue)fpsValue.textContent='—';}
     else{fpsFrames=0;fpsStamp=performance.now();start();}
   }
+
+  // Hook de debug (test visuel / fast-forward)
+  window.__lava={step,render,P,get aspect(){return aspect;},get N(){return N;}};
+
   try{
-    gl.clearColor(0,0,0,1);resize();update(.016);render();if(reduced&&fpsValue)fpsValue.textContent='—';else start();
+    gl.clearColor(0,0,0,1);resize();render();
+    if(reduced&&fpsValue)fpsValue.textContent='—';else start();
     canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();stop();host.classList.add('is-fallback');},{passive:false});
     document.addEventListener('visibilitychange',()=>document.hidden?stop():start(),{passive:true});
     addEventListener('resize',resize,{passive:true});
