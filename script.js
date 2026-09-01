@@ -209,16 +209,16 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   let reduced=motion.matches,raf=0,last=0,time=0,W=0,H=0,DPR=1,scrolling=false,scrollTimer=0;
   const fpsValue=document.querySelector('#fps-counter strong');
   let fpsFrames=0,fpsStamp=performance.now();
-  const MAX_BLOBS=8,clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+  const MAX_BLOBS=8,PHYS_SPEED=0.4,clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
   const blobs=[
-    {x:.2,y:.3,r:.12,vx:.022,vy:.018,color:[.95,.32,.08],base:[.95,.32,.08]},
-    {x:.42,y:.7,r:.14,vx:-.02,vy:.025,color:[1.0,.55,.12],base:[1.0,.55,.12]},
-    {x:.66,y:.28,r:.11,vx:.018,vy:-.022,color:[.85,.12,.05],base:[.85,.12,.05]},
-    {x:.82,y:.65,r:.13,vx:-.017,vy:-.019,color:[1.0,.68,.25],base:[1.0,.68,.25]},
-    {x:.5,y:.15,r:.1,vx:.024,vy:.016,color:[1.0,.42,.10],base:[1.0,.42,.10]},
-    {x:.28,y:.85,r:.11,vx:.019,vy:-.024,color:[.98,.62,.18],base:[.98,.62,.18]},
-    {x:.78,y:.45,r:.14,vx:-.026,vy:.021,color:[.30,.38,.85],base:[.30,.38,.85]},
-    {x:.58,y:.88,r:.13,vx:-.021,vy:-.017,color:[.62,.30,.88],base:[.62,.30,.88]}
+    {x:.18,y:.28,r:.11,vx:.02,vy:.016,color:[.22,.55,.92],base:[.22,.55,.92]},
+    {x:.44,y:.66,r:.12,vx:-.018,vy:.02,color:[.30,.78,.90],base:[.30,.78,.90]},
+    {x:.66,y:.26,r:.10,vx:.016,vy:-.018,color:[.83,.16,.33],base:[.83,.16,.33]},
+    {x:.82,y:.62,r:.115,vx:-.015,vy:-.016,color:[.97,.51,.67],base:[.97,.51,.67]},
+    {x:.50,y:.14,r:.10,vx:.02,vy:.014,color:[.98,.65,.18],base:[.98,.65,.18]},
+    {x:.28,y:.82,r:.105,vx:.017,vy:-.02,color:[.52,.36,.94],base:[.52,.36,.94]},
+    {x:.76,y:.44,r:.115,vx:-.022,vy:.018,color:[.20,.30,.85],base:[.20,.30,.85]},
+    {x:.56,y:.86,r:.11,vx:-.018,vy:-.015,color:[.85,.28,.40],base:[.85,.28,.40]}
   ];
   const blobData=new Float32Array(MAX_BLOBS*4),colorData=new Float32Array(MAX_BLOBS*3);
   blobs.forEach((b,i)=>colorData.set(b.color,i*3));
@@ -237,27 +237,32 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     void main(){
       vec2 uv=gl_FragCoord.xy/uResolution;
       float aspect=uResolution.x/uResolution.y;
-      vec2 ndc=(uv-0.5)*vec2(aspect,1.0);
-      // Espace monde isotrope : diviser l'axe X pour garder des formes rondes
-      vec2 p=vec2(ndc.x/aspect,ndc.y);
+      // Espace isotrope : correction d'aspect pour des blobs bien ronds
+      vec2 p=vec2((uv.x-0.5)*aspect, uv.y-0.5);
+      // Fond profond : bleu nuit dégradé + halo central discret
+      vec3 bg=mix(vec3(0.016,0.022,0.055),vec3(0.0,0.0,0.012),clamp(uv.y,0.0,1.0));
+      float cd=length(p);
+      bg+=vec3(0.05,0.09,0.16)*(1.0-smoothstep(0.0,0.85,cd))*0.5;
       float field=0.0;vec3 tint=vec3(0.0);
       for(int i=0;i<${MAX_BLOBS};i++){
-        vec2 bc=(uBlobs[i].xy-0.5)*2.0;
+        vec2 bc=vec2((uBlobs[i].x-0.5)*aspect, uBlobs[i].y-0.5);
         vec2 delta=p-bc;
         float d2=dot(delta,delta);
-        float contribution=uBlobs[i].z*uBlobs[i].z/(d2+0.004);
+        float contribution=uBlobs[i].z*uBlobs[i].z/(d2+0.006);
         field+=contribution;tint+=uColors[i]*contribution;
       }
-      // Métaball : seuil bas pour une vraie fusion continue, liseré à la frontière
-      float body=smoothstep(0.16,0.26,field);
-      float edge=smoothstep(0.09,0.16,field)*(1.0-smoothstep(0.26,0.34,field));
-      vec3 albedo=tint/max(field,.001);
-      vec3 hot=vec3(1.0,0.85,0.45);
-      vec3 core=mix(albedo,hot,0.1)*body*0.82;
-      vec3 glow=albedo*edge*0.9+vec3(1.0,0.6,0.25)*edge*0.2;
-      float bloom=clamp((field-0.06)/1.0,0.0,0.22);
-      vec3 color=core+glow+vec3(1.0,0.6,0.25)*bloom;
-      outColor=vec4(min(color,vec3(1.0)),1.0);
+      vec3 albedo=tint/max(field,0.001);
+      // Corps compact et net
+      float body=smoothstep(0.45,0.65,field);
+      // Liseré lumineux sur le contour
+      float rim=smoothstep(0.30,0.45,field)*(1.0-smoothstep(0.65,0.85,field));
+      vec3 col=bg;
+      col+=albedo*body;
+      col+=mix(albedo,vec3(1.0),0.40)*rim*0.85;
+      // Vignette douce pour concentrer le regard au centre
+      float vig=1.0-smoothstep(0.35,1.4,cd);
+      col*=mix(0.80,1.0,vig);
+      outColor=vec4(min(col,vec3(1.0)),1.0);
     }`;
   function shader(type,source){
     const result=gl.createShader(type);gl.shaderSource(result,source);gl.compileShader(result);
@@ -289,14 +294,14 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     clearTimeout(scrollTimer);scrollTimer=setTimeout(()=>{scrolling=false;document.documentElement.classList.remove('is-scrolling');resize();},180);
   }
   function update(dt){
-    time+=Math.min(.05,dt);
+    time+=Math.min(.05,dt)*PHYS_SPEED;
     const steps=dt>0?Math.max(1,Math.round(dt*60)):1;
     for(let s=0;s<steps;s++){
-      // 1. Bruit doux constant : les blobs dérivent lentement (jamais statiques)
+      // 1. Dérive lente, quasi sans inertie : la vitesse suit directement un bruit très lent
       blobs.forEach((b,i)=>{
-        const w1=time*0.31+i*1.7,w2=time*0.23+i*0.9;
-        b.vx+=Math.sin(w1)*0.00045+Math.cos(w2)*0.0003;
-        b.vy+=Math.cos(w1*1.3)*0.00045+Math.sin(w2*0.8)*0.0003;
+        const w1=time*0.05+i*1.7,w2=time*0.038+i*0.9;
+        b.vx=Math.sin(w1)*0.0012+Math.cos(w2)*0.001;
+        b.vy=Math.cos(w1*1.3)*0.0012+Math.sin(w2*0.8)*0.001;
       });
       // 2. Paires : partage du mouvement et mélange des couleurs au contact
       for(let i=0;i<blobs.length;i++){
@@ -325,10 +330,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
           }
         }
       }
-      // 3. Intégration + amortissement + retour progressif vers la couleur de base
+      // 3. Intégration (sans amortissement : pas d'inertie à dissiper)
       blobs.forEach(b=>{
-        b.x+=b.vx;b.y+=b.vy;
-        b.vx*=.995;b.vy*=.995;
+        b.x+=b.vx*PHYS_SPEED;b.y+=b.vy*PHYS_SPEED;
         b.color=lerp3(b.color,b.base,0.0012);
         if(b.x<b.r){b.x=b.r;b.vx=Math.abs(b.vx)*.7;}
         if(b.x>1-b.r){b.x=1-b.r;b.vx=-Math.abs(b.vx)*.7;}
