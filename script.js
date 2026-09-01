@@ -211,9 +211,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
 
   // ---------- Paramètres physiques (tunables) ----------
-  const MAX=620, N=560;            // capacité max + nb de particules : pool PLEINE LARGEUR avec une vraie
-                                    // épaisseur et une surface TRÈS dense (plus de détail, moins de grain)
-  const RENDER_MAX=620;            // particules rendues (toutes → surface lisse)
+  const MAX=680, N=620;            // capacité max + nb de particules : surface encore PLUS dense
+                                    // → rendu ultra-lisse, détail fin maximal
+  const RENDER_MAX=680;            // particules rendues (toutes → surface lisse)
   const H_SMOOTH=0.042;            // rayon d'interaction SPH (unités = hauteur d'écran)
   const REST_DENSITY=1.6;          // densité de repos
   const K_PRESSURE=0.18;           // raideur de pression
@@ -240,11 +240,11 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const COOL_RATE=0.008;           // refroidissement ambiant FAIBLE (proportionnel à T) : le pool reste un
                                     // réservoir tiède stable ; la base accumule la chaleur et perce le seuil
                                     // pour détacher des colonnes (la convection, pas le refroidissement, ferme le cycle)
-  const COOL_TOP=0.30;             // refroidissement au-dessus du pool (relaxation) → la cire montée
-                                    // se densifie et redescend ; le liquide ambiant reste froid (instabilité)
-  const COOL_TOP_Z=0.45;           // seuil de hauteur RELEVÉ : le refroidissement n'agit qu'à partir de 0.45 —
-                                    // la matière monte haut (colonnes longues) avant de refroidir et redescendre,
-                                    // au lieu de retomber juste au-dessus du pool
+  const COOL_TOP=0.18;             // refroidissement en l'air RÉDUIT (relaxation) : le liquide qui monte
+                                    // reste chaud et léger plus longtemps (colonnes longues, gouttes qui
+                                    // flottent avant de retomber) ; il redescend plus lentement
+  const COOL_TOP_Z=0.55;           // seuil de hauteur RELEVÉ : le refroidissement n'agit qu'à partir de 0.55 —
+                                    // la matière monte très haut encore chaude, ne refroidit que là-haut
   const CEIL_RECALL=0.20;          // force de rappel vers le bas au-dessus de CEIL_Z (ferme le cycle) — douce
   const CEIL_Z=0.85;               // altitude au-delà de laquelle le liquide est rabattu — haute :
                                     // la matière peut monter haut avant le rappel
@@ -593,9 +593,8 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       vec2 uv=gl_PointCoord*2.0-1.0;
       float d=length(uv);
       float w=exp(-d*d*4.0);   // gaussienne large → champ de densité lisse
-      w*=0.56;                  // NORMALISATION pour texture 1536×960 : le pool dense atteint
-                                // R≈0.9-1.0 sans saturer → le ratio G/R reste la vraie température
-                                // (le pool couvre ~3× plus de texels qu'à 1024×640)
+      w*=0.51;                  // NORMALISATION pour N=620 : le pool dense atteint R≈0.9-1.0
+                                // sans saturer → le ratio G/R reste la vraie température
       outColor=vec4(w, w*vTemp, 0.0, 0.0);  // R=densité, G=densité×température (somme pondérée), A=0
                                               // (le canal A est réservé à la température MAX, passe suivante)
     }`;
@@ -609,7 +608,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       vec2 uv=gl_PointCoord*2.0-1.0;
       float d=length(uv);
       float w=exp(-d*d*4.0);
-      w*=0.56;                 // même normalisation que la passe densité (texture 1536×960)
+      w*=0.51;                 // même normalisation que la passe densité (N=620)
       outColor=vec4(0.0, 0.0, 0.0, vTemp); // A=température max
     }`;
   const splat=makeProg(splatVS,splatFS,['uRes','uAspect']);
@@ -696,6 +695,12 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
         outCol=mix(bg, col, surf);
         // ombrage diffus (relief)
         outCol*=mix(0.82, 1.08, diff);
+        // ===== SUBSURFACE SCATTERING : la chaleur interne brille à travers le liquide =====
+        // Les zones chaudes éclairent leur voisinage (glow interne rose/cramoisi)
+        outCol+=vec3(0.16,0.06,0.10)*t*t*surf;
+        // ===== FRESNEL VERRE : les bords deviennent transparents/brillants (effet liquide) =====
+        float fres=pow(1.0-max(0.0, dot(nrm, viewDir)), 2.0);
+        outCol=mix(outCol, bg*0.4 + vec3(0.5,0.7,0.9)*fres, fres*0.35*surf);
         // reflet spéculaire blanc glacial (charte)
         outCol+=vec3(0.75,0.85,1.0)*spec;
         // rim light bleu glacier
@@ -705,6 +710,10 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
         // éclat au bord du pool (chaud)
         outCol+=col*0.12*surf;
       }
+      // ===== OMBRE DE CONTACT : le pool s'assombrit au niveau du sol =====
+      // (la matière posée sur la plaque absorbe la lumière, donne de la profondeur)
+      float floorShadow=smoothstep(0.03, 0.10, uv.y)*surf*0.25;
+      outCol=mix(outCol, outCol*0.72, floorShadow);
       outColor=vec4(outCol,1.0);
     }`;
   const comp=makeProg(compVS,compFS,['uRes','uDens','uDensSize']);
