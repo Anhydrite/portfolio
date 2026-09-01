@@ -235,19 +235,19 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const BURNERS=4;                 // nombre de SPOTS DE CHAUFFE (brûleurs discrets) espacés sur la largeur :
                                     // des colonnes naissent à des points précis, le reste du pool reste froid
                                     // et ancré (matière au sol) — mécanisme Rayleigh-Taylor localisé
-  const COOL_RATE=0.010;           // refroidissement ambiant FAIBLE (proportionnel à T) : le pool reste un
+  const COOL_RATE=0.008;           // refroidissement ambiant FAIBLE (proportionnel à T) : le pool reste un
                                     // réservoir tiède stable ; la base accumule la chaleur et perce le seuil
                                     // pour détacher des colonnes (la convection, pas le refroidissement, ferme le cycle)
-  const COOL_TOP=0.40;             // refroidissement au-dessus du pool (relaxation) → la cire montée
+  const COOL_TOP=0.32;             // refroidissement au-dessus du pool (relaxation) → la cire montée
                                     // se densifie et redescend ; le liquide ambiant reste froid (instabilité)
   const COOL_TOP_Z=0.30;           // seuil de hauteur : le refroidissement agit juste au-dessus du pool (0.20) :
                                     // la cire qui monte refroidit vite et redescend ; le pool lui-même reste tiède
                                     // (réservoir) et la matière reste au sol
   const CEIL_RECALL=0.25;          // force de rappel vers le bas au-dessus de CEIL_Z (ferme le cycle)
   const CEIL_Z=0.75;               // altitude au-delà de laquelle le liquide est rabattu
-  const CONDUCT=0.04;               // conduction thermique — anisotrope (voir CONDUCT_VBIAS) :
+  const CONDUCT=0.06;               // conduction thermique — anisotrope (voir CONDUCT_VBIAS) :
                                     // verticale pour chauffer la colonne au-dessus des spots (elle devient
-                                    // légère et monte), horizontale faible pour garder le reste du pool froid
+                                    // légère et monte), horizontale pour diffuser la chaleur dans le pool
   const CONDUCT_VBIAS=3.0;          // BIAIS VERTICAL de conduction (×3 sur l'axe vertical) : la chaleur
                                     // monte dans les colonnes au-dessus des spots (elles deviennent légères et
                                     // montent) ; elle ne s'étale presque pas latéralement (le pool reste froid)
