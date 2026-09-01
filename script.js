@@ -223,28 +223,30 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const GRAVITY=0.34;              // gravité (unités/s²) — réduite : la base chaude (temp≈1.0) peut vaincre
                                     // la gravité et monter (poussée ~0.6 > 0.34) ; le dessus froid (0.3-0.5)
                                     // reste plus lourd que sa poussée → redescend (matière au sol)
-  const BUOYANCY=0.85;             // poussée d'Archimède (unités/s² par écart de température) — forte :
+  const BUOYANCY=0.92;             // poussée d'Archimède (unités/s² par écart de température) — forte :
                                     // la base chaude (≈1.0) monte franchement, le dessus froid redescend
-  const HEAT_RATE=0.70;            // taux de chauffe de la plaque → la base du pool devient franchement
+  const HEAT_RATE=0.75;            // taux de chauffe de la plaque → la base du pool devient franchement
                                     // chaude (≈0.9-1.0) et perce le seuil pour détacher des colonnes ;
                                     // le reste du pool reste tiède (0.5-0.6) → matière au sol
   const WARMUP=35;                 // durée de PRÉCHAUFFE au chargement (s) : la plaque monte de 0 → pleine puissance (courbe smoothstep)
   const HEAT_ZONE=0.30;            // (réservé) hauteur plafond de la zone de chauffe
-  const HEAT_THICK=0.07;           // épaisseur de la plaque chauffante — couche basse du pool :
-                                    // le fond chauffe fort, le dessus du pool reste à température intermédiaire
+  const HEAT_THICK=0.09;           // épaisseur de la plaque chauffante — couche basse épaissie :
+                                    // plus de matière est chauffée au sol → plus de colonnes se détachent
+                                    // (moins de matière qui reste figée au fond)
   const BURNERS=4;                 // nombre de SPOTS DE CHAUFFE (brûleurs discrets) espacés sur la largeur :
                                     // des colonnes naissent à des points précis, le reste du pool reste froid
                                     // et ancré (matière au sol) — mécanisme Rayleigh-Taylor localisé
   const COOL_RATE=0.008;           // refroidissement ambiant FAIBLE (proportionnel à T) : le pool reste un
                                     // réservoir tiède stable ; la base accumule la chaleur et perce le seuil
                                     // pour détacher des colonnes (la convection, pas le refroidissement, ferme le cycle)
-  const COOL_TOP=0.32;             // refroidissement au-dessus du pool (relaxation) → la cire montée
+  const COOL_TOP=0.30;             // refroidissement au-dessus du pool (relaxation) → la cire montée
                                     // se densifie et redescend ; le liquide ambiant reste froid (instabilité)
-  const COOL_TOP_Z=0.30;           // seuil de hauteur : le refroidissement agit juste au-dessus du pool (0.20) :
-                                    // la cire qui monte refroidit vite et redescend ; le pool lui-même reste tiède
-                                    // (réservoir) et la matière reste au sol
-  const CEIL_RECALL=0.25;          // force de rappel vers le bas au-dessus de CEIL_Z (ferme le cycle)
-  const CEIL_Z=0.75;               // altitude au-delà de laquelle le liquide est rabattu
+  const COOL_TOP_Z=0.45;           // seuil de hauteur RELEVÉ : le refroidissement n'agit qu'à partir de 0.45 —
+                                    // la matière monte haut (colonnes longues) avant de refroidir et redescendre,
+                                    // au lieu de retomber juste au-dessus du pool
+  const CEIL_RECALL=0.20;          // force de rappel vers le bas au-dessus de CEIL_Z (ferme le cycle) — douce
+  const CEIL_Z=0.85;               // altitude au-delà de laquelle le liquide est rabattu — haute :
+                                    // la matière peut monter haut avant le rappel
   const CONDUCT=0.06;               // conduction thermique — anisotrope (voir CONDUCT_VBIAS) :
                                     // verticale pour chauffer la colonne au-dessus des spots (elle devient
                                     // légère et monte), horizontale pour diffuser la chaleur dans le pool
@@ -257,7 +259,8 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const RESTITUTION=0.35;          // rebond (sol/murs) — suffisant pour des éclaboussures vivantes
   const DAMPING=0.992;             // amortissement global
   const GROUND_FRICTION=0.96;      // friction au sol
-  const MAX_FALL=0.12;             // vitesse terminale de chute — basse → rythme langoureux (montée ET descente lentes)
+  const MAX_FALL=0.16;             // vitesse terminale — un peu plus haute : les blobs montent/descendent
+                                    // plus vite → plus de matière circule, moins de stagnation au sol
   const PART_RADIUS=0.026;         // rayon de rendu d'une particule (lisse)
   // --- Graine de Rayleigh-Taylor : perturbation douce de l'interface (colonnes espacées) ---
   const RT_SEED=0.008;             // amplitude de la graine (décalage latéral) — pool large & bas → colonnes régulières sur toute la largeur
