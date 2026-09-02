@@ -63,13 +63,12 @@ updateScrollState();
    Le canvas est recadré sur l'encre réelle ; tailles cohérentes et responsives. */
 const sigC=document.getElementById('sig'),sigCtx=sigC.getContext('2d'),DPR=Math.min(devicePixelRatio||1,2);
 async function initSig(){
-  /* Polices : ZapfinoExtraLT-Four (calligraphie, idem live) + Quicksand 700 (capitales) */
+  /* Polices : ZapfinoExtraLT-Four (calligraphie, idem live) — les DEUX mots dans cette police */
   let ok=false;
   try{const f=new FontFace('ZapfinoForteLTPro','url(./assets/font/ZapfinoExtraLT-Four.otf)');await f.load();document.fonts.add(f);ok=true;}catch(e){}
   const famC=ok?'ZapfinoForteLTPro':'cursive';
-  try{await document.fonts.load('700 100px Quicksand');}catch(e){}
   const txtR='Robin';        // calligraphié en Zapfino
-  const txtZ='Zmuda';        // écrit en Quicksand gras
+  const txtZ='Zmuda';        // calligraphié en Zapfino (même police que Robin)
   let active=false,raf=0,ld=null;
   const inView=()=>{const r=sigC.getBoundingClientRect();return r.top<window.innerHeight&&r.bottom>0;};
   /* Taille de « Zmuda » : même clamp que l'ancien .zmuda CSS (rem→px calculé en JS) */
@@ -78,12 +77,12 @@ async function initSig(){
     const vw=window.innerWidth;
     return Math.max(2.8*rem,Math.min(5.8*rem,vw*0.08));
   };
-  /* Mesure + mise en page : les deux mots sur la même baseline, séparés par un espace */
+  /* Mesure + mise en page : les deux mots en Zapfino, même taille, sur la même baseline */
   function layout(){
-    const SIZEZ=Math.round(zmudaSize());      // taille de « Zmuda » (Quicksand)
-    const SIZER=Math.round(SIZEZ*1.12);       // taille de « Robin » (Zapfino) — ascendantes hautes
-    const gapL=Math.round(SIZEZ*0.06);        // espace entre les lettres d'un même mot
-    const gapW=Math.round(SIZEZ*0.32);        // espace entre les mots (Robin / Zmuda)
+    const SIZEZ=Math.round(zmudaSize());      // taille commune (Zapfino)
+    const SIZER=SIZEZ;                         // même taille pour Robin et Zmuda
+    const gapL=Math.round(SIZEZ*0.05);        // espace entre les lettres d'un même mot
+    const gapW=Math.round(SIZEZ*0.34);        // espace entre les mots (Robin / Zmuda)
     function measure(txt,px,fontFull){
       // fontFull = chaîne complète (ex: '104px ZapfinoForteLTPro' ou '700 93px Quicksand')
       sigCtx.font=fontFull;sigCtx.textBaseline='alphabetic';sigCtx.textAlign='left';
@@ -93,7 +92,7 @@ async function initSig(){
       return {letters,ascent:mt.actualBoundingBoxAscent||px*.72,descent:mt.actualBoundingBoxDescent||px*.16,px};
     }
     const segR=measure(txtR,SIZER,SIZER+'px '+famC);
-    const segZ=measure(txtZ,SIZEZ,'700 '+SIZEZ+'px Quicksand');
+    const segZ=measure(txtZ,SIZEZ,SIZEZ+'px '+famC);
     // positionne les lettres : Robin puis espace puis Zmuda
     let x=0;
     segR.letters.forEach(l=>{l.x=x;x+=l.wd+gapL;});
