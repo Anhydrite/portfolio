@@ -107,6 +107,23 @@ async function initSig(){
     sigCtx.clearRect(0,0,W,H);
     return ld2;
   }
+  /* Dégradé du thème (glacier → cramoisi) appliqué à la calligraphie, comme sur « Zmuda ».
+     Les couleurs sont lues depuis les variables CSS du thème pour rester synchronisées.
+     Direction verticale (haut clair → bas cramoisi) : chaque lettre reçoit la même
+     progression que les capitales de .zmuda (dégradé CSS 135° ≈ haut-clair/bas-cramoisi). */
+  function themeGrad(){
+    const cs=getComputedStyle(document.documentElement);
+    const v=n=>{const s=cs.getPropertyValue(n).trim();return s||null;};
+    const ice=v('--ice'),cyan=v('--cyan'),crimson=v('--crimson');
+    const {h}=ld;
+    const g=sigCtx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'#f0f6ff');
+    g.addColorStop(.15,'#f0f6ff');
+    g.addColorStop(.45,ice||'#bcd6ea');
+    g.addColorStop(.70,cyan||'#74bccb');
+    g.addColorStop(1,crimson||'#b32247');
+    return g;
+  }
   /* Écriture lettre par lettre : tracé progressif au pinceau (setLineDash) — méthode robinzmuda.fr.
      À chaque frame on redessine TOUT l'état (lettres finies pleines + lettre courante partielle). */
   function writeLoop(){
@@ -117,7 +134,7 @@ async function initSig(){
     const ERASE=380;
     let li=0,off=BRUSH,phase='trace',lastT=null,pauseAcc=0,eraseT0=0;
     sigCtx.lineWidth=Math.max(1.4,SIZE*0.016);sigCtx.lineCap='round';sigCtx.lineJoin='round';
-    sigCtx.strokeStyle='#ffffff';
+    sigCtx.strokeStyle=themeGrad();
     function paint(l,alpha){
       sigCtx.save();sigCtx.globalAlpha=alpha;sigCtx.font=SIZE+'px '+fam;
       sigCtx.strokeText(l.c,l.x,baseY);sigCtx.restore();
@@ -162,7 +179,10 @@ async function initSig(){
     if(!active)return;
     cancelAnimationFrame(raf);
     ld=layout();
-    if(REDUCED_MOTION){ld.L.forEach(l=>{sigCtx.strokeStyle='#fff';sigCtx.lineWidth=Math.max(1.4,ld.SIZE*.016);sigCtx.font=ld.SIZE+'px '+fam;sigCtx.strokeText(l.c,l.x,ld.baseY);});}
+    if(REDUCED_MOTION){
+      sigCtx.strokeStyle=themeGrad();sigCtx.lineWidth=Math.max(1.4,ld.SIZE*.016);
+      ld.L.forEach(l=>{sigCtx.font=ld.SIZE+'px '+fam;sigCtx.strokeText(l.c,l.x,ld.baseY);});
+    }
     else writeLoop();
   }
   /* Au resize, la taille de police change : on recalcule la mise en page (debounce). */
