@@ -125,14 +125,22 @@ async function initSig(){
     return g;
   }
   /* Écriture lettre par lettre : tracé progressif au pinceau (setLineDash) — méthode robinzmuda.fr.
-     À chaque frame on redessine TOUT l'état (lettres finies pleines + lettre courante partielle). */
+     À chaque frame on redessine TOUT l'état (lettres finies pleines + lettre courante partielle).
+     Phases : trace (Robin) → zmuda (révélation de « Zmuda ») → pause → erase → trace… */
   function writeLoop(){
     const {w,h,L,SIZE,baseY}=ld;
-    const BRUSH=Math.round(SIZE*4.7); // longueur du pinceau proportionnelle à la taille
-    const SPEED=Math.max(6,Math.round(SIZE*0.11)); // vitesse du pinceau
+    const zLetters=[...document.querySelectorAll('.zname .zl')]; // lettres de « Zmuda »
+    const BRUSH=Math.round(SIZE*4.7);  // longueur du pinceau (trait qui écrit)
+    const SPEED_MS=SIZE*0.19;          // vitesse du pinceau en px/ms (timing indépendant du framerate)
     const PAUSE=5000;
     const ERASE=380;
-    let li=0,off=BRUSH,phase='trace',lastT=null,pauseAcc=0,eraseT0=0;
+    const ZL_PER=150;   // durée d'apparition d'une lettre de « Zmuda »
+    const ZL_GAP=70;    // micro-pause entre deux lettres
+    let li=0,phase='trace',lastT=null,pauseAcc=0,eraseT0=0;
+    let off=BRUSH,traceT0=null;         // pinceau : position restante, chrono du tracé
+    let zT0=0,zi=0;     // état de la révélation de « Zmuda »
+    function showZ(i){zLetters.forEach((el,j)=>el.classList.toggle('hide',!(j<i)));}
+    showZ(0);           // « Zmuda » caché pendant l'écriture de « Robin », révélé ensuite
     sigCtx.lineWidth=Math.max(1.4,SIZE*0.016);sigCtx.lineCap='round';sigCtx.lineJoin='round';
     sigCtx.strokeStyle=themeGrad();
     function paint(l,alpha){
@@ -149,26 +157,36 @@ async function initSig(){
     function frame(now){
       if(!active)return;
       if(!inView()){raf=requestAnimationFrame(frame);return;}
+      const dt=lastT==null?0:now-lastT;lastT=now;
       if(phase==='trace'){
-        off-=SPEED;
+        // tracé piloté par le TEMPS (dt) : même vitesse quel que soit le framerate
+        if(traceT0==null)traceT0=now;
+        off=Math.max(0,BRUSH-(now-traceT0)*SPEED_MS);
         drawAll([Math.max(0,BRUSH-off),off+26]);
         if(off<=0){
-          li++;off=BRUSH;
-          if(li>=L.length){drawAll(null);pauseAcc=0;lastT=null;phase='pause';}
+          li++;off=BRUSH;traceT0=null;
+          if(li>=L.length){drawAll(null);zi=0;zT0=now;phase='zmuda';}
         }
       }
+      else if(phase==='zmuda'){
+        // révèle les lettres de « Zmuda » une à une (gauche→droite)
+        if(zi>=zLetters.length){pauseAcc=0;lastT=null;phase='pause';}
+        else if(now-zT0>=ZL_PER+ZL_GAP){zi++;zT0=now;showZ(zi);}
+      }
       else if(phase==='pause'){
-        const dt=lastT==null?0:now-lastT;lastT=now;
         pauseAcc+=dt;
         if(pauseAcc>=PAUSE){eraseT0=now;phase='erase';}
       }
       else if(phase==='erase'){
         const k=1-Math.min(1,(now-eraseT0)/ERASE);
+        // Robin s'efface en fondu, « Zmuda » disparaît progressivement (droite→gauche)
         sigCtx.clearRect(0,0,w,h);
         sigCtx.globalAlpha=k;
         L.forEach(l=>sigCtx.strokeText(l.c,l.x,baseY));
         sigCtx.globalAlpha=1;
-        if(k<=0){li=0;off=BRUSH;phase='trace';}
+        const nv=Math.max(0,Math.min(zLetters.length,Math.ceil((1-k)*zLetters.length)));
+        showZ(zLetters.length-nv);
+        if(k<=0){li=0;off=BRUSH;traceT0=null;zi=0;phase='trace';}
       }
       raf=requestAnimationFrame(frame);
     }
@@ -179,7 +197,9 @@ async function initSig(){
     if(!active)return;
     cancelAnimationFrame(raf);
     ld=layout();
+    const zEls=[...document.querySelectorAll('.zname .zl')];
     if(REDUCED_MOTION){
+      zEls.forEach(el=>el.classList.remove('hide'));
       sigCtx.strokeStyle=themeGrad();sigCtx.lineWidth=Math.max(1.4,ld.SIZE*.016);
       ld.L.forEach(l=>{sigCtx.font=ld.SIZE+'px '+fam;sigCtx.strokeText(l.c,l.x,ld.baseY);});
     }
