@@ -57,60 +57,75 @@ window.addEventListener('resize',()=>{sectionPositions.forEach(item=>{item.top=i
 })();
 updateScrollState();
 
-/* ---- Signature "Robin" (canvas calligraphique) — tracé progressif comme robinzmuda.fr ----
-   Intégration propre : le canvas est recadré sur l'encre réelle (pas de boîte pleine de vide),
-   la taille de police suit celle de « Zmuda » (ratio 1.12) pour rester cohérente et responsive. */
+/* ---- Signature « Robin Zmuda » (canvas calligraphique) — tracé progressif au pinceau ----
+   Méthode robinzmuda.fr : chaque lettre est écrite avec un pinceau (setLineDash qui progresse),
+   lettre par lettre, « Robin » (Zapfino) puis « Zmuda » (Quicksand gras), dans la continuité.
+   Le canvas est recadré sur l'encre réelle ; tailles cohérentes et responsives. */
 const sigC=document.getElementById('sig'),sigCtx=sigC.getContext('2d'),DPR=Math.min(devicePixelRatio||1,2);
 async function initSig(){
-  /* Police identique au live robinzmuda.fr (ZapfinoExtraLT-Four, déclarée ZapfinoForteLTPro) */
+  /* Polices : ZapfinoExtraLT-Four (calligraphie, idem live) + Quicksand 700 (capitales) */
   let ok=false;
   try{const f=new FontFace('ZapfinoForteLTPro','url(./assets/font/ZapfinoExtraLT-Four.otf)');await f.load();document.fonts.add(f);ok=true;}catch(e){}
-  const fam=ok?'ZapfinoForteLTPro':'cursive';
-  const txt='Robin';
+  const famC=ok?'ZapfinoForteLTPro':'cursive';
+  try{await document.fonts.load('700 100px Quicksand');}catch(e){}
+  const txtR='Robin';        // calligraphié en Zapfino
+  const txtZ='Zmuda';        // écrit en Quicksand gras
   let active=false,raf=0,ld=null;
   const inView=()=>{const r=sigC.getBoundingClientRect();return r.top<window.innerHeight&&r.bottom>0;};
-  const sigSize=()=>{
-    // La taille de « Robin » suit celle de « Zmuda » (déjà résolue en px par le navigateur,
-    // responsive via son clamp). Ratio ~1.12 : la calligraphie Zapfino a des ascendantes hautes,
-    // il faut une taille de police supérieure pour une hauteur d'œil cohérente.
-    const z=document.querySelector('.zmuda');
-    const zpx=z?parseFloat(getComputedStyle(z).fontSize):0;
-    return zpx>0?Math.round(zpx*1.12):104;
+  /* Taille de « Zmuda » : même clamp que l'ancien .zmuda CSS (rem→px calculé en JS) */
+  const zmudaSize=()=>{
+    const rem=parseFloat(getComputedStyle(document.documentElement).fontSize)||16;
+    const vw=window.innerWidth;
+    return Math.max(2.8*rem,Math.min(5.8*rem,vw*0.08));
   };
-  /* Mesure + mise en page recadrée sur l'encre réelle de « Robin » */
+  /* Mesure + mise en page : les deux mots sur la même baseline, séparés par un espace */
   function layout(){
-    const SIZE=sigSize();
-    const gap=Math.round(SIZE*0.07);
-    sigCtx.font=SIZE+'px '+fam;sigCtx.textBaseline='alphabetic';sigCtx.textAlign='left';
-    const mt=sigCtx.measureText(txt);
-    const L=txt.split('').map(c=>({c}));
-    // largeur d'avance + débordements d'encre (les ornements Zapfino débordent de l'avance)
-    L.forEach(l=>{const m=sigCtx.measureText(l.c);l.wd=m.width;l.bbL=m.actualBoundingBoxLeft||0;l.bbR=m.actualBoundingBoxRight||0;});
-    const totalW=L.reduce((a,l)=>a+l.wd,0)+gap*(L.length-1);
-    const ascent=mt.actualBoundingBoxAscent||SIZE*.72;
-    const descent=mt.actualBoundingBoxDescent||SIZE*.16;
-    const minL=Math.min(0,...L.map(l=>l.bbL));          // débordement gauche (souvent négatif)
-    const maxR=Math.max(...L.map(l=>l.wd+l.bbR));       // débordement droit
+    const SIZEZ=Math.round(zmudaSize());      // taille de « Zmuda » (Quicksand)
+    const SIZER=Math.round(SIZEZ*1.12);       // taille de « Robin » (Zapfino) — ascendantes hautes
+    const gapL=Math.round(SIZEZ*0.06);        // espace entre les lettres d'un même mot
+    const gapW=Math.round(SIZEZ*0.32);        // espace entre les mots (Robin / Zmuda)
+    function measure(txt,px,fontFull){
+      // fontFull = chaîne complète (ex: '104px ZapfinoForteLTPro' ou '700 93px Quicksand')
+      sigCtx.font=fontFull;sigCtx.textBaseline='alphabetic';sigCtx.textAlign='left';
+      const letters=txt.split('').map(c=>({c,font:fontFull,px}));
+      letters.forEach(l=>{const m=sigCtx.measureText(l.c);l.wd=m.width;l.bbL=m.actualBoundingBoxLeft||0;l.bbR=m.actualBoundingBoxRight||0;});
+      const mt=sigCtx.measureText(txt);
+      return {letters,ascent:mt.actualBoundingBoxAscent||px*.72,descent:mt.actualBoundingBoxDescent||px*.16,px};
+    }
+    const segR=measure(txtR,SIZER,SIZER+'px '+famC);
+    const segZ=measure(txtZ,SIZEZ,'700 '+SIZEZ+'px Quicksand');
+    // positionne les lettres : Robin puis espace puis Zmuda
+    let x=0;
+    segR.letters.forEach(l=>{l.x=x;x+=l.wd+gapL;});
+    x=x-gapL+gapW;
+    segZ.letters.forEach(l=>{l.x=x;x+=l.wd+gapL;});
+    const Wtotal=x-gapL;
+    // débordements d'encre globaux (ornements Zapfino à gauche/droite)
+    const all=[...segR.letters,...segZ.letters];
+    const minL=Math.min(0,...all.map(l=>l.bbL));
+    const maxR=Math.max(...all.map(l=>l.x+l.wd+l.bbR));
     const padL=Math.max(2,Math.round(-minL)+2);
-    const padR=Math.max(2,Math.round(totalW-(maxR))+2);
-    const padT=Math.round(SIZE*0.05);                   // marge haute (ornements ascendants)
-    const padB=Math.max(2,Math.round(SIZE*0.02));       // marge basse min (l'encre touche presque le bas → alignement avec Zmuda)
-    const W=padL+totalW+padR;
+    const padR=Math.max(2,Math.round(Wtotal-(maxR))+2);
+    const ascent=Math.max(segR.ascent,segZ.ascent);
+    const descent=Math.max(segR.descent,segZ.descent);
+    const padT=Math.round(SIZEZ*0.05);
+    const padB=Math.max(2,Math.round(SIZEZ*0.02));
+    const W=padL+Wtotal+padR;
     const H=padT+Math.ceil(ascent+descent)+padB;
-    const baseY=padT+Math.ceil(ascent);                 // baseline dans le canvas
-    let x=padL;
-    L.forEach(l=>{l.x=x;x+=l.wd+gap;});
-    const ld2={w:W,h:H,L,SIZE,baseY};
-    // dimensionne le canvas natif (l'affichage CSS reste 1:1)
-    sigC.width=W*DPR;sigC.height=H*DPR;
+    const baseY=padT+Math.ceil(ascent);
+    // décale toutes les lettres du padL
+    all.forEach(l=>{l.x+=padL;});
+    // les lettres ont déjà {c,font,px,wd,bbL,bbR,x} (font = chaîne complète)
+    const L=[...segR.letters,...segZ.letters];
+    const ld2={w:W,h:H,L,SIZEZ,SIZER,baseY,nR:segR.letters.length};
+    // dimensionne le canvas natif + fixe la taille d'affichage (1:1 CSS, robuste au DPR)
+    sigC.width=Math.round(W*DPR);sigC.height=Math.round(H*DPR);
     sigCtx.setTransform(DPR,0,0,DPR,0,0);
     sigCtx.clearRect(0,0,W,H);
+    sigC.style.width=Math.round(W)+'px';sigC.style.height=Math.round(H)+'px';
     return ld2;
   }
-  /* Dégradé du thème (glacier → cramoisi) appliqué à la calligraphie, comme sur « Zmuda ».
-     Les couleurs sont lues depuis les variables CSS du thème pour rester synchronisées.
-     Direction verticale (haut clair → bas cramoisi) : chaque lettre reçoit la même
-     progression que les capitales de .zmuda (dégradé CSS 135° ≈ haut-clair/bas-cramoisi). */
+  /* Dégradé vertical du thème (haut clair → bas cramoisi), lu depuis les variables CSS */
   function themeGrad(){
     const cs=getComputedStyle(document.documentElement);
     const v=n=>{const s=cs.getPropertyValue(n).trim();return s||null;};
@@ -124,34 +139,41 @@ async function initSig(){
     g.addColorStop(1,crimson||'#b32247');
     return g;
   }
-  /* Écriture lettre par lettre : tracé progressif au pinceau (setLineDash) — méthode robinzmuda.fr.
-     À chaque frame on redessine TOUT l'état (lettres finies pleines + lettre courante partielle).
-     Phases : trace (Robin) → zmuda (révélation de « Zmuda ») → pause → erase → trace… */
+  /* Écriture lettre par lettre au pinceau, « Robin » puis « Zmuda », dans la continuité.
+     Chaque lettre est tracée en un temps fixe (LETTRE_MS) — piloté par le temps (pas le framerate).
+     Après Robin, une respiration (GAP_MOT) puis Zmuda s'écrit avec le même geste. */
   function writeLoop(){
-    const {w,h,L,SIZE,baseY}=ld;
-    const zLetters=[...document.querySelectorAll('.zname .zl')]; // lettres de « Zmuda »
-    const BRUSH=Math.round(SIZE*4.7);  // longueur du pinceau (trait qui écrit)
-    const SPEED_MS=SIZE*0.19;          // vitesse du pinceau en px/ms (timing indépendant du framerate)
-    const PAUSE=5000;
-    const ERASE=380;
-    const ZL_PER=150;   // durée d'apparition d'une lettre de « Zmuda »
-    const ZL_GAP=70;    // micro-pause entre deux lettres
+    const {w,h,L,baseY,nR}=ld;
+    const LETTRE_MS=300;       // durée d'écriture d'une lettre (rythme lent, calligraphie)
+    const GAP_MOT=450;         // respiration entre « Robin » et « Zmuda » (fin de mot)
+    const PAUSE=5200;
+    const ERASE=420;
     let li=0,phase='trace',lastT=null,pauseAcc=0,eraseT0=0;
-    let off=BRUSH,traceT0=null;         // pinceau : position restante, chrono du tracé
-    let zT0=0,zi=0;     // état de la révélation de « Zmuda »
-    function showZ(i){zLetters.forEach((el,j)=>el.classList.toggle('hide',!(j<i)));}
-    showZ(0);           // « Zmuda » caché pendant l'écriture de « Robin », révélé ensuite
-    sigCtx.lineWidth=Math.max(1.4,SIZE*0.016);sigCtx.lineCap='round';sigCtx.lineJoin='round';
+    let trT0=0;                 // chrono du tracé de la lettre courante
+    sigCtx.lineCap='round';sigCtx.lineJoin='round';
     sigCtx.strokeStyle=themeGrad();
-    function paint(l,alpha){
-      sigCtx.save();sigCtx.globalAlpha=alpha;sigCtx.font=SIZE+'px '+fam;
-      sigCtx.strokeText(l.c,l.x,baseY);sigCtx.restore();
+    /* Largeur du « pinceau » : assez longue pour couvrir la lettre + donner le tempo */
+    const brushOf=l=>Math.max(80,l.px*4.2);
+    function paint(l,alpha,dash){
+      sigCtx.save();
+      sigCtx.globalAlpha=alpha;
+      sigCtx.font=l.font;
+      sigCtx.lineWidth=Math.max(1.4,l.px*0.016);
+      sigCtx.strokeStyle=themeGrad();
+      if(dash)sigCtx.setLineDash(dash);
+      sigCtx.strokeText(l.c,l.x,baseY);
+      sigCtx.restore();
     }
-    function drawAll(dash){
+    function drawState(liCur,k){
+      // k = progression [0..1] de la lettre courante ; dessine finies + courante partielle
       sigCtx.clearRect(0,0,w,h);
       for(let i=0;i<L.length;i++){
-        if(i<li)paint(L[i],1);
-        else if(i===li&&dash){sigCtx.save();sigCtx.setLineDash(dash);sigCtx.font=SIZE+'px '+fam;sigCtx.strokeText(L[i].c,L[i].x,baseY);sigCtx.restore();}
+        if(i<liCur){paint(L[i],1,null);}
+        else if(i===liCur){
+          const B=brushOf(L[i]);
+          const done=B*k;
+          paint(L[i],1,[Math.max(0,done),Math.max(2,B-done+22)]);
+        }
       }
     }
     function frame(now){
@@ -159,19 +181,20 @@ async function initSig(){
       if(!inView()){raf=requestAnimationFrame(frame);return;}
       const dt=lastT==null?0:now-lastT;lastT=now;
       if(phase==='trace'){
-        // tracé piloté par le TEMPS (dt) : même vitesse quel que soit le framerate
-        if(traceT0==null)traceT0=now;
-        off=Math.max(0,BRUSH-(now-traceT0)*SPEED_MS);
-        drawAll([Math.max(0,BRUSH-off),off+26]);
-        if(off<=0){
-          li++;off=BRUSH;traceT0=null;
-          if(li>=L.length){drawAll(null);zi=0;zT0=now;phase='zmuda';}
+        const cur=L[li];
+        const dur=LETTRE_MS;  // durée fixe par lettre, quel que soit le framerate
+        const k=Math.min(1,(now-trT0)/dur);
+        drawState(li,k);
+        if(k>=1){
+          // lettre finie : on la fige en trait plein complet
+          paint(cur,1,null);
+          li++;
+          if(li>=L.length){phase='pause';pauseAcc=0;lastT=null;}
+          else{
+            // respiration entre la fin de « Robin » et le début de « Zmuda »
+            trT0=now+(li===nR?GAP_MOT:0);
+          }
         }
-      }
-      else if(phase==='zmuda'){
-        // révèle les lettres de « Zmuda » une à une (gauche→droite)
-        if(zi>=zLetters.length){pauseAcc=0;lastT=null;phase='pause';}
-        else if(now-zT0>=ZL_PER+ZL_GAP){zi++;zT0=now;showZ(zi);}
       }
       else if(phase==='pause'){
         pauseAcc+=dt;
@@ -179,14 +202,11 @@ async function initSig(){
       }
       else if(phase==='erase'){
         const k=1-Math.min(1,(now-eraseT0)/ERASE);
-        // Robin s'efface en fondu, « Zmuda » disparaît progressivement (droite→gauche)
         sigCtx.clearRect(0,0,w,h);
         sigCtx.globalAlpha=k;
-        L.forEach(l=>sigCtx.strokeText(l.c,l.x,baseY));
+        L.forEach(l=>paint(l,1,null));
         sigCtx.globalAlpha=1;
-        const nv=Math.max(0,Math.min(zLetters.length,Math.ceil((1-k)*zLetters.length)));
-        showZ(zLetters.length-nv);
-        if(k<=0){li=0;off=BRUSH;traceT0=null;zi=0;phase='trace';}
+        if(k<=0){li=0;trT0=0;phase='trace';}
       }
       raf=requestAnimationFrame(frame);
     }
@@ -197,11 +217,9 @@ async function initSig(){
     if(!active)return;
     cancelAnimationFrame(raf);
     ld=layout();
-    const zEls=[...document.querySelectorAll('.zname .zl')];
     if(REDUCED_MOTION){
-      zEls.forEach(el=>el.classList.remove('hide'));
-      sigCtx.strokeStyle=themeGrad();sigCtx.lineWidth=Math.max(1.4,ld.SIZE*.016);
-      ld.L.forEach(l=>{sigCtx.font=ld.SIZE+'px '+fam;sigCtx.strokeText(l.c,l.x,ld.baseY);});
+      sigCtx.lineCap='round';sigCtx.lineJoin='round';
+      ld.L.forEach(l=>{sigCtx.font=l.font;sigCtx.lineWidth=Math.max(1.4,l.px*.016);sigCtx.strokeStyle=themeGrad();sigCtx.strokeText(l.c,l.x,ld.baseY);});
     }
     else writeLoop();
   }
