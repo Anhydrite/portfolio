@@ -57,10 +57,10 @@ window.addEventListener('resize',()=>{sectionPositions.forEach(item=>{item.top=i
 })();
 updateScrollState();
 
-/* ---- Signature « Robin Zmuda » (canvas calligraphique) — tracé progressif au pinceau ----
-   Méthode robinzmuda.fr : chaque lettre est écrite avec un pinceau (setLineDash qui progresse),
-   lettre par lettre, « Robin » (Zapfino) puis « Zmuda » (Quicksand gras), dans la continuité.
-   Le canvas est recadré sur l'encre réelle ; tailles cohérentes et responsives. */
+/* ---- Signature « Robin Zmuda » (canvas calligraphique) — tracé PUIS remplissage ----
+   Chaque lettre est écrite avec un pinceau (setLineDash qui progresse), les DEUX mots en Zapfino,
+   dans la continuité : d'abord TOUTES les lettres en trait seul, puis un « crayon » les remplit
+   une à une. Le canvas est recadré sur l'encre réelle ; tailles cohérentes et responsives. */
 const sigC=document.getElementById('sig'),sigCtx=sigC.getContext('2d'),DPR=Math.min(devicePixelRatio||1,2);
 async function initSig(){
   /* Polices : ZapfinoExtraLT-Four (calligraphie, idem live) — les DEUX mots dans cette police */
@@ -138,17 +138,22 @@ async function initSig(){
     g.addColorStop(1,crimson||'#b32247');
     return g;
   }
-  /* Écriture lettre par lettre au pinceau, « Robin » puis « Zmuda », dans la continuité.
-     Chaque lettre est tracée en un temps fixe (LETTRE_MS) — piloté par le temps (pas le framerate).
-     Après Robin, une respiration (GAP_MOT) puis Zmuda s'écrit avec le même geste. */
+  /* Écriture au pinceau en DEUX temps, « Robin » puis « Zmuda », dans la continuité :
+     phase trace — TOUTES les lettres sont écrites une à une (trait seul, AUCUN remplissage),
+     phase fill — le « crayon » remplit ensuite chaque lettre dans l'ordre du tracé
+     (fillText révélé de gauche à droite par un clip). Chaque lettre dure un temps fixe
+     (LETTRE_MS / FILL_MS), piloté par le temps (pas le framerate).
+     Phases : trace → fill → pause → erase. */
   function writeLoop(){
     const {w,h,L,baseY,nR}=ld;
-    const LETTRE_MS=300;       // durée d'écriture d'une lettre (rythme lent, calligraphie)
-    const GAP_MOT=450;         // respiration entre « Robin » et « Zmuda » (fin de mot)
-    const PAUSE=5200;
-    const ERASE=420;
+    const LETTRE_MS=750;       // durée d'écriture (trait) d'une lettre — rythme lent, calligraphie
+    const GAP_MOT=600;         // respiration entre « Robin » et « Zmuda » (fin de mot)
+    const FILL_MS=620;         // durée de remplissage d'une lettre (crayon), après tout le tracé
+    const GAP_FILL=900;        // pause entre la fin du tracé complet et le début du remplissage
+    const PAUSE=5800;
+    const ERASE=560;
     let li=0,phase='trace',lastT=null,pauseAcc=0,eraseT0=0;
-    let trT0=0;                 // chrono du tracé de la lettre courante
+    let trT0=-1;                 // chrono du tracé/remplissage de la lettre courante (-1 : à initialiser au 1er frame)
     sigCtx.lineCap='round';sigCtx.lineJoin='round';
     sigCtx.strokeStyle=themeGrad();
     /* Largeur du « pinceau » : assez longue pour couvrir la lettre + donner le tempo */
@@ -163,15 +168,58 @@ async function initSig(){
       sigCtx.strokeText(l.c,l.x,baseY);
       sigCtx.restore();
     }
+    /* Remplit une lettre progressivement (le « crayon » la remplit de gauche à droite) :
+       le trait fin existant reste, et par-dessus on applique un REMPLISSAGE ÉPAIS et net
+       (fillText du dégradé + contour clair épais) limité à la zone d'encre de la lettre,
+       révélé par un clip qui avance — ainsi « rempli » se voit nettement face à « tracé seul ».
+       fillW = largeur du contour de remplissage (≥ 0), plus épais que le trait de tracé. */
+    function fillLetter(l,k,fillW){
+      const inkL=l.x+(l.bbL<0?l.bbL:0);
+      const inkW=(l.wd+(l.bbR>0?l.bbR:0))-(l.bbL<0?l.bbL:0);
+      const zoneH=l.px*1.5;
+      const zoneY=baseY-l.px*1.05;
+      sigCtx.save();
+      // clip 1 : zone d'encre de la lettre (bornes larges, couvre les ornements)
+      sigCtx.beginPath();
+      sigCtx.rect(inkL-2,zoneY,inkW+6,zoneH);
+      sigCtx.clip();
+      // clip 2 : avancement du crayon (révèle la partie remplie)
+      sigCtx.beginPath();
+      sigCtx.rect(inkL-2,zoneY,Math.max(0,(inkW+6)*k),zoneH);
+      sigCtx.clip();
+      sigCtx.font=l.font;
+      // 1) remplissage plein (dégradé du thème)
+      sigCtx.fillStyle=themeGrad();
+      sigCtx.fillText(l.c,l.x,baseY);
+      // 2) contour clair épais par-dessus → la lettre « remplie » paraît nette et solide
+      if(fillW>0){
+        sigCtx.lineWidth=fillW;
+        sigCtx.strokeStyle='rgba(235,244,255,0.92)';
+        sigCtx.strokeText(l.c,l.x,baseY);
+      }
+      sigCtx.restore();
+    }
+    /* Rendu de l'état courant.
+       trace : lettres terminées en trait seul (non remplies) + lettre courante en cours de tracé.
+       fill  : TOUTES les lettres restent visibles (trait fin), les précédentes sont remplies
+               (remplissage épais net), la courante est en cours de remplissage, les suivantes
+               restent en trait seul. fillW épais par rapport au trait de tracé (visible). */
+    const fillW=l=>Math.max(2.2,l.px*0.030);   // contour du remplissage : ~2× le trait de tracé
     function drawState(liCur,k){
-      // k = progression [0..1] de la lettre courante ; dessine finies + courante partielle
       sigCtx.clearRect(0,0,w,h);
+      const filling=phase!=='trace';
       for(let i=0;i<L.length;i++){
-        if(i<liCur){paint(L[i],1,null);}
-        else if(i===liCur){
-          const B=brushOf(L[i]);
-          const done=B*k;
-          paint(L[i],1,[Math.max(0,done),Math.max(2,B-done+22)]);
+        const l=L[i];
+        if(filling){
+          paint(l,1,null);                     // le trait fin reste visible sur toutes les lettres
+          if(i<liCur)fillLetter(l,1,fillW(l));
+          else if(i===liCur)fillLetter(l,k,fillW(l));
+        }else{
+          if(i<liCur){paint(l,1,null);}        // lettre déjà écrite : trait seul, pas encore remplie
+          else if(i===liCur){
+            const B=brushOf(l);
+            paint(l,1,[Math.max(0,B*k),Math.max(2,B*(1-k)+22)]); // écriture du trait
+          }
         }
       }
     }
@@ -179,20 +227,29 @@ async function initSig(){
       if(!active)return;
       if(!inView()){raf=requestAnimationFrame(frame);return;}
       const dt=lastT==null?0:now-lastT;lastT=now;
+      if(window.__ph)window.__ph(phase+':'+li);
       if(phase==='trace'){
         const cur=L[li];
-        const dur=LETTRE_MS;  // durée fixe par lettre, quel que soit le framerate
-        const k=Math.min(1,(now-trT0)/dur);
+        if(trT0<0)trT0=now;              // 1er frame (ou reprise après effacement) : démarre le trait ici
+        const k=Math.min(1,(now-trT0)/LETTRE_MS);
         drawState(li,k);
         if(k>=1){
-          // lettre finie : on la fige en trait plein complet
-          paint(cur,1,null);
+          paint(cur,1,null);   // lettre finie : trait seul (rien n'est rempli pendant le tracé)
           li++;
-          if(li>=L.length){phase='pause';pauseAcc=0;lastT=null;}
-          else{
-            // respiration entre la fin de « Robin » et le début de « Zmuda »
-            trT0=now+(li===nR?GAP_MOT:0);
-          }
+          if(li>=L.length){li=0;trT0=now+GAP_FILL;phase='fill';} // TOUTES écrites → le crayon remplit (après une pause)
+          else trT0=now+(li===nR?GAP_MOT:0);
+        }
+      }
+      else if(phase==='fill'){
+        const cur=L[li];
+        if(trT0<0)trT0=now;              // 1er frame de la passe remplissage
+        const k=Math.min(1,(now-trT0)/FILL_MS);
+        drawState(li,k);
+        if(k>=1){
+          paint(cur,1,null);fillLetter(cur,1,fillW(cur));   // lettre remplie
+          li++;
+          if(li>=L.length){li=0;phase='pause';pauseAcc=0;lastT=null;}
+          else trT0=now+(li===nR?GAP_MOT:0);      // respiration entre les mots, comme au tracé
         }
       }
       else if(phase==='pause'){
@@ -203,9 +260,9 @@ async function initSig(){
         const k=1-Math.min(1,(now-eraseT0)/ERASE);
         sigCtx.clearRect(0,0,w,h);
         sigCtx.globalAlpha=k;
-        L.forEach(l=>paint(l,1,null));
+        L.forEach(l=>{paint(l,1,null);fillLetter(l,1,fillW(l));});
         sigCtx.globalAlpha=1;
-        if(k<=0){li=0;trT0=0;phase='trace';}
+        if(k<=0){li=0;trT0=-1;phase='trace';}
       }
       raf=requestAnimationFrame(frame);
     }
