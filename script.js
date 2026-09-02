@@ -57,100 +57,119 @@ window.addEventListener('resize',()=>{sectionPositions.forEach(item=>{item.top=i
 })();
 updateScrollState();
 
-/* ---- Signature "Robin" (canvas calligraphique) ---- */
+/* ---- Signature "Robin" (canvas calligraphique) — tracé progressif comme robinzmuda.fr ----
+   Intégration propre : le canvas est recadré sur l'encre réelle (pas de boîte pleine de vide),
+   la taille de police suit celle de « Zmuda » (ratio 1.12) pour rester cohérente et responsive. */
 const sigC=document.getElementById('sig'),sigCtx=sigC.getContext('2d'),DPR=Math.min(devicePixelRatio||1,2);
-function sizeSig(){sigC.width=760*DPR;sigC.height=200*DPR;sigCtx.setTransform(DPR,0,0,DPR,0,0);sigCtx.clearRect(0,0,760,200);}
-sizeSig();
 async function initSig(){
+  /* Police identique au live robinzmuda.fr (ZapfinoExtraLT-Four, déclarée ZapfinoForteLTPro) */
   let ok=false;
-  try{const f=new FontFace('ZapfinoForteLTPro','url(./assets/font/ZapfinoForteLTPro.otf)');await f.load();document.fonts.add(f);ok=true;}catch(e){}
+  try{const f=new FontFace('ZapfinoForteLTPro','url(./assets/font/ZapfinoExtraLT-Four.otf)');await f.load();document.fonts.add(f);ok=true;}catch(e){}
   const fam=ok?'ZapfinoForteLTPro':'cursive';
-  const txt='Robin';let active=false,raf=0;
+  const txt='Robin';
+  let active=false,raf=0,ld=null;
   const inView=()=>{const r=sigC.getBoundingClientRect();return r.top<window.innerHeight&&r.bottom>0;};
-  /* Calcule la mise en page des lettres (taille auto + centrage) et l'efface */
+  const sigSize=()=>{
+    // La taille de « Robin » suit celle de « Zmuda » (déjà résolue en px par le navigateur,
+    // responsive via son clamp). Ratio ~1.12 : la calligraphie Zapfino a des ascendantes hautes,
+    // il faut une taille de police supérieure pour une hauteur d'œil cohérente.
+    const z=document.querySelector('.zmuda');
+    const zpx=z?parseFloat(getComputedStyle(z).fontSize):0;
+    return zpx>0?Math.round(zpx*1.12):104;
+  };
+  /* Mesure + mise en page recadrée sur l'encre réelle de « Robin » */
   function layout(){
-    const w=760,h=200;sigCtx.clearRect(0,0,w,h);sigCtx.font='120px '+fam;sigCtx.textBaseline='alphabetic';sigCtx.textAlign='left';
-    let sz=120,tw=sigCtx.measureText(txt).width;
-    while(tw>w-46&&sz>48){sz*=.94;sigCtx.font=sz+'px '+fam;tw=sigCtx.measureText(txt).width;}
-    const y=h-36,gap=8;const L=[];
-    txt.split('').forEach(c=>L.push({c,x:0,y,wd:sigCtx.measureText(c).width}));
-    let x=(w-L.reduce((a,l)=>a+l.wd+gap,0)+gap)/2;
+    const SIZE=sigSize();
+    const gap=Math.round(SIZE*0.07);
+    sigCtx.font=SIZE+'px '+fam;sigCtx.textBaseline='alphabetic';sigCtx.textAlign='left';
+    const mt=sigCtx.measureText(txt);
+    const L=txt.split('').map(c=>({c}));
+    // largeur d'avance + débordements d'encre (les ornements Zapfino débordent de l'avance)
+    L.forEach(l=>{const m=sigCtx.measureText(l.c);l.wd=m.width;l.bbL=m.actualBoundingBoxLeft||0;l.bbR=m.actualBoundingBoxRight||0;});
+    const totalW=L.reduce((a,l)=>a+l.wd,0)+gap*(L.length-1);
+    const ascent=mt.actualBoundingBoxAscent||SIZE*.72;
+    const descent=mt.actualBoundingBoxDescent||SIZE*.16;
+    const minL=Math.min(0,...L.map(l=>l.bbL));          // débordement gauche (souvent négatif)
+    const maxR=Math.max(...L.map(l=>l.wd+l.bbR));       // débordement droit
+    const padL=Math.max(2,Math.round(-minL)+2);
+    const padR=Math.max(2,Math.round(totalW-(maxR))+2);
+    const padT=Math.round(SIZE*0.05);                   // marge haute (ornements ascendants)
+    const padB=Math.max(2,Math.round(SIZE*0.02));       // marge basse min (l'encre touche presque le bas → alignement avec Zmuda)
+    const W=padL+totalW+padR;
+    const H=padT+Math.ceil(ascent+descent)+padB;
+    const baseY=padT+Math.ceil(ascent);                 // baseline dans le canvas
+    let x=padL;
     L.forEach(l=>{l.x=x;x+=l.wd+gap;});
-    return {w,h,L};
+    const ld2={w:W,h:H,L,SIZE,baseY};
+    // dimensionne le canvas natif (l'affichage CSS reste 1:1)
+    sigC.width=W*DPR;sigC.height=H*DPR;
+    sigCtx.setTransform(DPR,0,0,DPR,0,0);
+    sigCtx.clearRect(0,0,W,H);
+    return ld2;
   }
-  /* Rendu plein d'une lettre (fillText), avec alpha et éventuel décalage vertical */
-  function paintLetter(l,alpha,offY){
-    sigCtx.save();
-    sigCtx.globalAlpha=alpha;
-    sigCtx.fillStyle='#ffffff';
-    sigCtx.translate(0,offY);
-    sigCtx.fillText(l.c,l.x,l.y);
-    sigCtx.restore();
-  }
-  /* Rendu de l'état courant : lettres déjà posées pleines + lettre courante qui se révèle */
-  function drawState({w,h,L},li,t){
-    sigCtx.clearRect(0,0,w,h);
-    for(let i=0;i<L.length;i++){
-      if(i<li){ paintLetter(L[i],1,0); }
-      else if(i===li){
-        // apparition fluide : fondu + léger glissement vertical (la lettre se « pose »)
-        const p=Math.min(1,t);
-        const ease=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
-        paintLetter(L[i],ease,(1-ease)*14);
+  /* Écriture lettre par lettre : tracé progressif au pinceau (setLineDash) — méthode robinzmuda.fr.
+     À chaque frame on redessine TOUT l'état (lettres finies pleines + lettre courante partielle). */
+  function writeLoop(){
+    const {w,h,L,SIZE,baseY}=ld;
+    const BRUSH=Math.round(SIZE*4.7); // longueur du pinceau proportionnelle à la taille
+    const SPEED=Math.max(6,Math.round(SIZE*0.11)); // vitesse du pinceau
+    const PAUSE=5000;
+    const ERASE=380;
+    let li=0,off=BRUSH,phase='trace',lastT=null,pauseAcc=0,eraseT0=0;
+    sigCtx.lineWidth=Math.max(1.4,SIZE*0.016);sigCtx.lineCap='round';sigCtx.lineJoin='round';
+    sigCtx.strokeStyle='#ffffff';
+    function paint(l,alpha){
+      sigCtx.save();sigCtx.globalAlpha=alpha;sigCtx.font=SIZE+'px '+fam;
+      sigCtx.strokeText(l.c,l.x,baseY);sigCtx.restore();
+    }
+    function drawAll(dash){
+      sigCtx.clearRect(0,0,w,h);
+      for(let i=0;i<L.length;i++){
+        if(i<li)paint(L[i],1);
+        else if(i===li&&dash){sigCtx.save();sigCtx.setLineDash(dash);sigCtx.font=SIZE+'px '+fam;sigCtx.strokeText(L[i].c,L[i].x,baseY);sigCtx.restore();}
       }
     }
-  }
-  /* Effacement en fondu de toute la signature */
-  function fadeOut(layoutData,next){
-    const {w,h,L}=layoutData,t0=performance.now(),DUR=500;
-    function f(now){
-      const k=1-Math.min(1,(now-t0)/DUR);
-      sigCtx.clearRect(0,0,w,h);
-      L.forEach(l=>paintLetter(l,k,0));
-      if(k>0)raf=requestAnimationFrame(f);else if(next)next();
-    }
-    raf=requestAnimationFrame(f);
-  }
-  /* Machine à états (écriture → pause visible → effacement → re-écriture).
-     Le temps n'avance que lorsque le canvas est visible : hors écran, on ne dessine pas. */
-  function writeLoop(layoutData){
-    const {L}=layoutData;
-    const PER=720;            // durée d'apparition d'une lettre
-    const PAUSE=6000;         // temps plein avant réécriture
-    let li=0,acc=0,visibleAcc=0,phase='write',lastT=null;
     function frame(now){
       if(!active)return;
-      const dt=lastT==null?0:now-lastT;lastT=now;
-      if(inView()){
-        if(phase==='write'){
-          acc+=dt;
-          drawState(layoutData,li,Math.min(1,acc/PER));
-          if(acc>=PER){
-            if(li<L.length-1){li++;acc=0;}
-            else{acc=0;visibleAcc=0;phase='pause';}
-          }
+      if(!inView()){raf=requestAnimationFrame(frame);return;}
+      if(phase==='trace'){
+        off-=SPEED;
+        drawAll([Math.max(0,BRUSH-off),off+26]);
+        if(off<=0){
+          li++;off=BRUSH;
+          if(li>=L.length){drawAll(null);pauseAcc=0;lastT=null;phase='pause';}
         }
-        else if(phase==='pause'){
-          visibleAcc+=dt;
-          if(visibleAcc>=PAUSE){
-            phase='fade';
-            fadeOut(layoutData,()=>{li=0;acc=0;visibleAcc=0;phase='write';});
-          }
-        }
+      }
+      else if(phase==='pause'){
+        const dt=lastT==null?0:now-lastT;lastT=now;
+        pauseAcc+=dt;
+        if(pauseAcc>=PAUSE){eraseT0=now;phase='erase';}
+      }
+      else if(phase==='erase'){
+        const k=1-Math.min(1,(now-eraseT0)/ERASE);
+        sigCtx.clearRect(0,0,w,h);
+        sigCtx.globalAlpha=k;
+        L.forEach(l=>sigCtx.strokeText(l.c,l.x,baseY));
+        sigCtx.globalAlpha=1;
+        if(k<=0){li=0;off=BRUSH;phase='trace';}
       }
       raf=requestAnimationFrame(frame);
     }
     raf=requestAnimationFrame(frame);
   }
+  /* (Re)lance l'animation avec la mise en page courante */
+  function start(){
+    if(!active)return;
+    cancelAnimationFrame(raf);
+    ld=layout();
+    if(REDUCED_MOTION){ld.L.forEach(l=>{sigCtx.strokeStyle='#fff';sigCtx.lineWidth=Math.max(1.4,ld.SIZE*.016);sigCtx.font=ld.SIZE+'px '+fam;sigCtx.strokeText(l.c,l.x,ld.baseY);});}
+    else writeLoop();
+  }
+  /* Au resize, la taille de police change : on recalcule la mise en page (debounce). */
+  let rt=0;
+  window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(start,180);},{passive:true});
   const io=new IntersectionObserver(es=>{es.forEach(e=>{
-    if(e.isIntersecting&&!active){active=true;io.disconnect();
-      if(REDUCED_MOTION){
-        // mouvement réduit : texte plein affiché d'un bloc, sans animation
-        const ld=layout();
-        ld.L.forEach(l=>paintLetter(l,1,0));
-      }
-      else writeLoop(layout());
-    }
+    if(e.isIntersecting&&!active){active=true;io.disconnect();start();}
   });},{threshold:.3});
   io.observe(sigC);
 }
