@@ -65,32 +65,93 @@ async function initSig(){
   let ok=false;
   try{const f=new FontFace('ZapfinoForteLTPro','url(./assets/font/ZapfinoForteLTPro.otf)');await f.load();document.fonts.add(f);ok=true;}catch(e){}
   const fam=ok?'ZapfinoForteLTPro':'cursive';
-  const txt='Robin';let active=false;
-  function draw(){
-    const w=760,h=200;sigCtx.clearRect(0,0,w,h);sigCtx.font='120px '+fam;sigCtx.textBaseline='alphabetic';
+  const txt='Robin';let active=false,raf=0;
+  const inView=()=>{const r=sigC.getBoundingClientRect();return r.top<window.innerHeight&&r.bottom>0;};
+  /* Calcule la mise en page des lettres (taille auto + centrage) et l'efface */
+  function layout(){
+    const w=760,h=200;sigCtx.clearRect(0,0,w,h);sigCtx.font='120px '+fam;sigCtx.textBaseline='alphabetic';sigCtx.textAlign='left';
     let sz=120,tw=sigCtx.measureText(txt).width;
     while(tw>w-46&&sz>48){sz*=.94;sigCtx.font=sz+'px '+fam;tw=sigCtx.measureText(txt).width;}
     const y=h-36,gap=8;const L=[];
     txt.split('').forEach(c=>L.push({c,x:0,y,wd:sigCtx.measureText(c).width}));
     let x=(w-L.reduce((a,l)=>a+l.wd+gap,0)+gap)/2;
     L.forEach(l=>{l.x=x;x+=l.wd+gap;});
-    // Rendu plein (fillText) : lettres pleines et lisses, sans liseré ni cassure
-    sigCtx.fillStyle='#ffffff';sigCtx.textAlign='left';
-    if(REDUCED_MOTION){L.forEach(l=>sigCtx.fillText(l.c,l.x,l.y));return;}
-    // Apparition lettre par lettre avec fondu (chaque lettre est redessinée pendant son fade)
-    let li=0,alpha=0;
-    (function go(){
-      const L2=L[li];
-      alpha=Math.min(1,alpha+0.12);
-      sigCtx.clearRect(L2.x-6,L2.y-150,L2.wd+16,176);
-      sigCtx.globalAlpha=alpha;
-      sigCtx.fillText(L2.c,L2.x,L2.y);
-      sigCtx.globalAlpha=1;
-      if(alpha<1){requestAnimationFrame(go);}
-      else{li++;alpha=0;if(li<L.length){requestAnimationFrame(go);}}
-    })();
+    return {w,h,L};
   }
-  const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting&&!active){active=true;io.disconnect();draw();}});},{threshold:.3});
+  /* Rendu plein d'une lettre (fillText), avec alpha et éventuel décalage vertical */
+  function paintLetter(l,alpha,offY){
+    sigCtx.save();
+    sigCtx.globalAlpha=alpha;
+    sigCtx.fillStyle='#ffffff';
+    sigCtx.translate(0,offY);
+    sigCtx.fillText(l.c,l.x,l.y);
+    sigCtx.restore();
+  }
+  /* Rendu de l'état courant : lettres déjà posées pleines + lettre courante qui se révèle */
+  function drawState({w,h,L},li,t){
+    sigCtx.clearRect(0,0,w,h);
+    for(let i=0;i<L.length;i++){
+      if(i<li){ paintLetter(L[i],1,0); }
+      else if(i===li){
+        // apparition fluide : fondu + léger glissement vertical (la lettre se « pose »)
+        const p=Math.min(1,t);
+        const ease=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+        paintLetter(L[i],ease,(1-ease)*14);
+      }
+    }
+  }
+  /* Effacement en fondu de toute la signature */
+  function fadeOut(layoutData,next){
+    const {w,h,L}=layoutData,t0=performance.now(),DUR=500;
+    function f(now){
+      const k=1-Math.min(1,(now-t0)/DUR);
+      sigCtx.clearRect(0,0,w,h);
+      L.forEach(l=>paintLetter(l,k,0));
+      if(k>0)raf=requestAnimationFrame(f);else if(next)next();
+    }
+    raf=requestAnimationFrame(f);
+  }
+  /* Machine à états (écriture → pause visible → effacement → re-écriture).
+     Le temps n'avance que lorsque le canvas est visible : hors écran, on ne dessine pas. */
+  function writeLoop(layoutData){
+    const {L}=layoutData;
+    const PER=720;            // durée d'apparition d'une lettre
+    const PAUSE=6000;         // temps plein avant réécriture
+    let li=0,acc=0,visibleAcc=0,phase='write',lastT=null;
+    function frame(now){
+      if(!active)return;
+      const dt=lastT==null?0:now-lastT;lastT=now;
+      if(inView()){
+        if(phase==='write'){
+          acc+=dt;
+          drawState(layoutData,li,Math.min(1,acc/PER));
+          if(acc>=PER){
+            if(li<L.length-1){li++;acc=0;}
+            else{acc=0;visibleAcc=0;phase='pause';}
+          }
+        }
+        else if(phase==='pause'){
+          visibleAcc+=dt;
+          if(visibleAcc>=PAUSE){
+            phase='fade';
+            fadeOut(layoutData,()=>{li=0;acc=0;visibleAcc=0;phase='write';});
+          }
+        }
+      }
+      raf=requestAnimationFrame(frame);
+    }
+    raf=requestAnimationFrame(frame);
+  }
+  const io=new IntersectionObserver(es=>{es.forEach(e=>{
+    if(e.isIntersecting&&!active){active=true;io.disconnect();
+      if(REDUCED_MOTION){
+        // mouvement réduit : texte plein affiché d'un bloc, sans animation
+        const ld=layout();
+        ld.L.forEach(l=>paintLetter(l,1,0));
+      }
+      else writeLoop(layout());
+    }
+  });},{threshold:.3});
   io.observe(sigC);
 }
 initSig();
