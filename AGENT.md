@@ -10,6 +10,7 @@ Ce fichier décrit les **guidelines de travail** que tout agent doit suivre pour
 - Design : esthétique **hacker/terminal**, thème "glacier + cramoisi" (bleu glacier `--blue`, teal `--cyan`, rouge cramoisi `--crimson`), fond noir.
 - L'essentiel du travail récent porte sur **l'animation de fond** : une lampe à lave physique (pool de cire au fond → colonnes → bulles → retour au pool).
 - Rendu via **WebGL2** dans `<canvas id="lava-canvas">` (conteneur `#lava-bg`).
+- Recherche de voisins optimisée par grille uniforme dans `script.js` : les interactions SPH ne parcourent plus toutes les paires distantes.
 
 ---
 
@@ -35,7 +36,7 @@ Ce fichier décrit les **guidelines de travail** que tout agent doit suivre pour
 ### 2.5 Cache busting
 - Toute modification de `script.js` doit incrémenter la **version du cache** dans `index.html` :
   `<script src="./script.js?v=N"></script>`
-- On est actuellement à `v=70`.
+- La version actuelle du cache est `v=104`.
 
 ### 2.6 Outils de validation
 - Serveur local : `python3 -m http.server <port>`.
@@ -69,6 +70,7 @@ Méthode **Double Density Relaxation** (Clavet 2005), en 2D, par particules :
 
 - `P[]` = particules `{x,y,vx,vy,px,py,temp,r}`.
 - **Pas de temps fixe** : `FIXED=1/240` avec accumulateur et sous-pas (borné à 12) → stabilité, pas de traversée du rayon d'interaction.
+- **Recherche de voisins** : une grille uniforme de cellules `H_SMOOTH` est reconstruite au début du sous-pas puis après les corrections de position ; les paires candidates dans le rayon de cohésion sont réutilisées par cohésion, densité, pression, viscosité et conduction.
 - **Double passes de relaxation de pression** (2 passes, 2e passe à demi-intensité) → pas de flick.
 - Ordre dans `step()` :
   0. **détection du cou de colonne** (`neckY`) : tranche la plus étroite au-dessus du pool, avec pool dessous + tête dessus ; **verrouillage** `PR_LATCH` pour éviter le clignotement
@@ -115,12 +117,12 @@ Règles d'équilibre importantes :
 
 ### 3.4 Rendu
 - **Rendu métaballe 2 passes (2025)** :
-  1. **Pass 1a** : les particules splattent leur **champ de densité** (gaussiennes `exp(-d²·4)` × 0.19, splat 41px) dans une **texture haute résolution 512×320** (FBO RGBA8, accumulation additive `ONE,ONE`) — R = densité, G = densité×température (somme pondérée), A = 0.
+  1. **Pass 1a** : les particules splattent leur **champ de densité** (gaussiennes `exp(-d²·4)` × 0.51, splat 123px) dans une **texture haute résolution 1536×960** (FBO RGBA8, accumulation additive `ONE,ONE`) — R = densité, G = densité×température (somme pondérée), A = 0.
   2. **Pass 1b** : **température MAX** (blend `MAX`) dans le canal A — les points chauds des colonnes restent visibles même sous le pool dense (pas de moyenne grise).
   3. **Pass 2** : quad plein écran qui échantillonne le champ et applique une **iso-surface** (`smoothstep(0.35, 0.70, dens)`) → forme pleine à bords adoucis + palette thermique + fond/vignette. Température = moyenne pondérée (corps du pool) fusionnée avec le max (colonnes) selon la densité.
 - **Normalisation cruciale** : la densité est mise à l'échelle (×0.19) pour que le pool dense atteigne R≈1.0 **sans saturer** — sinon R et G saturent à 1.0 et `G/R` donne 1.0 → blanc partout, couleurs perdues (piège découvert avec le pool pleine largeur à N=480).
 - C'est ce qui donne la surface **continue et lisse** (pas de grain de particules) : le seuil de densité fusionne les particules en un volume visqueux.
-- **Performance** : canvas en résolution `base=0.85` + texture de densité 512×320 ; 60 FPS mesurés.
+- **Performance** : canvas en pleine résolution DPR (`base=1.0`) + texture de densité 1536×960 ; les performances dépendent fortement du GPU.
 - **Palette** (charte graphique glacier/cramoisi, étalée pour voir les variations) : bleu nuit → glacier `--blue` → teal `--cyan` → pervenche `--purple` → cramoisi `--crimson` → rose `--rose` → blanc rosé (pic).
 
 ### 3.5 Pièges connus (leçons apprises)
@@ -148,8 +150,8 @@ Règles d'équilibre importantes :
 - **Modèle validé quantitativement sur 10 min simulées** : pool stable (31-43 % des particules), température soutenue (0.72-0.74), **2-10 clusters, 1-4 blobs détachés** (bulles discrètes), `big` (plus gros cluster) 122-259 → le pool n'est pas la masse entière, des bulles se détachent réellement.
 - **Mécanique clé (2025) — fracture de Plateau-Rayleigh** : une colonne qui s'étire forme un **cou** (tranche la plus étroite au-dessus du pool, avec pool dessous + tête dessus, verrouillée `PR_LATCH` pas) ; la **pression est coupée à travers le plan du cou** (les paires de part et d'autre n'interagissent plus) + **ouverture latérale après la réconciliation PBD** → le film casse, la goutte se détache. *Piège découvert* : toute impulsion de vitesse dans la passe de forces est effacée par la relaxation de pression + PBD (comme l'ancienne cohésion, code mort) — seules les coupes d'interaction et les forces post-PBD survivent.
 - **Pièges corrigés au fil du dev** : (1) pool trop haut → hors de la zone de chauffe → jamais assez chaud ; (2) chauffage uniforme → toute la masse flotte en un blob (il faut un brûleur localisé + `HEAT_THICK` faible) ; (3) pincement local (brins fins) inopérant car la colonne est épaisse — seule la fracture macroscopique fonctionne ; (4) fausse détection de cou sur le sommet du dôme → exiger une tête au-dessus ; (5) viscosité/cohésion trop fortes → la convection s'arrête (pool chaud figé, rien ne monte) ; (6) le pool liquide s'étale naturellement en flaque au fond (hydrostatique, comme dans une vraie lampe) — ne pas chercher à en faire un dôme.
-- **Rendu** : canvas en **résolution augmentée (base=0.85) + upscale CSS** → les splats gaussiens couvrent plus de pixels → surface continue (masque le grain SPH) ; splats 41px (texture 512×320), noyau `exp(-d²·4)` × 0.19 (densité normalisée anti-saturation) ; **2 passes splat** : densité additive (R/G) + température MAX (A) pour garder les points chauds visibles ; palette **charte graphique** (glacier → teal → pervenche → cramoisi → rose → blanc rosé) étalée pour voir les variations de température.
-- **Pool PLEINE LARGEUR (2026)** : le pool occupe ~94-98 % de la largeur d'écran (N=480), épaisseur ~0.20 de hauteur. **4 brûleurs discrets** (BURNERS=4) espacés créent des colonnes localisées (Rayleigh-Taylor) pendant que le reste du pool reste froid et ancré → la matière reste au sol. **Préchauffe progressive** (WARMUP=35 s, courbe smoothstep) : la plaque monte de 0 → pleine puissance, visible en couleurs (glacier → cramoisi).
+- **Rendu** : canvas en **pleine résolution DPR (base=1.0)** → les splats gaussiens couvrent plus de pixels → surface continue (masque le grain SPH) ; splats 123px (texture 1536×960), noyau `exp(-d²·4)` × 0.51 (densité normalisée anti-saturation) ; **2 passes splat** : densité additive (R/G) + température MAX (A) pour garder les points chauds visibles ; palette **charte graphique** (glacier → teal → pervenche → cramoisi → rose → blanc rosé) étalée pour voir les variations de température.
+- **Pool PLEINE LARGEUR (2026)** : le pool occupe ~94-98 % de la largeur d'écran (N=620), épaisseur ~0.20 de hauteur. **4 brûleurs discrets** (BURNERS=4) espacés créent des colonnes localisées (Rayleigh-Taylor) pendant que le reste du pool reste froid et ancré → la matière reste au sol. **Préchauffe progressive** (WARMUP=35 s, courbe smoothstep) : la plaque monte de 0 → pleine puissance, visible en couleurs (glacier → cramoisi).
 - Données physiques vérifiées en ligne (8 sources) : σ_RT = √(gk(ρ₂−ρ₁)/(ρ₁+ρ₂)), λ_PR ≈ 9R (≈ 4,5×diamètre), Stokes 2/9 Δρgr²/μ (v ∝ r²), Ra_c ≈ 1707,76 (Boussinesq, plaques rigides), pas de seuil de Weber universel pour la coalescence.
 
 Prochaine direction suggérée (si l'utilisateur continue) :
