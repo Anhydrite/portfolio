@@ -58,17 +58,17 @@ window.addEventListener('resize',()=>{sectionPositions.forEach(item=>{item.top=i
 updateScrollState();
 
 /* ---- Signature « Robin Zmuda » (canvas calligraphique) — tracé PUIS remplissage ----
-   Chaque lettre est écrite avec un pinceau (setLineDash qui progresse), les DEUX mots en Zapfino,
+   Chaque lettre est écrite avec un pinceau (setLineDash qui progresse), les DEUX mots en Lavishly Yours,
    dans la continuité : d'abord TOUTES les lettres en trait seul, puis un « crayon » les remplit
    une à une. Le canvas est recadré sur l'encre réelle ; tailles cohérentes et responsives. */
 const sigC=document.getElementById('sig'),sigCtx=sigC.getContext('2d'),DPR=Math.min(devicePixelRatio||1,2);
 async function initSig(){
-  /* Polices : ZapfinoExtraLT-Four (calligraphie, idem live) — les DEUX mots dans cette police */
+  /* Police : Lavishly Yours (Google Fonts, calligraphie expressive) — les DEUX mots dans cette police */
   let ok=false;
-  try{const f=new FontFace('ZapfinoForteLTPro','url(./assets/font/ZapfinoExtraLT-Four.otf)');await f.load();document.fonts.add(f);ok=true;}catch(e){}
-  const famC=ok?'ZapfinoForteLTPro':'cursive';
-  const txtR='Robin';        // calligraphié en Zapfino
-  const txtZ='Zmuda';        // calligraphié en Zapfino (même police que Robin)
+  try{await document.fonts.load('400 120px "Lavishly Yours"');ok=document.fonts.check('400 120px "Lavishly Yours"');}catch(e){}
+  const famC=ok?'Lavishly Yours':'cursive';
+  const txtR='Robin';        // calligraphié en Lavishly Yours
+  const txtZ='Zmuda';        // Z majuscule, calligraphié en Lavishly Yours
   let active=false,raf=0,ld=null;
   const inView=()=>{const r=sigC.getBoundingClientRect();return r.top<window.innerHeight&&r.bottom>0;};
   /* Taille de « Zmuda » : même clamp que l'ancien .zmuda CSS (rem→px calculé en JS) */
@@ -77,14 +77,14 @@ async function initSig(){
     const vw=window.innerWidth;
     return Math.max(2.8*rem,Math.min(5.8*rem,vw*0.08));
   };
-  /* Mesure + mise en page : les deux mots en Zapfino, même taille, sur la même baseline */
+  /* Mesure + mise en page : les deux mots en Lavishly Yours, même taille, sur la même baseline */
   function layout(){
-    const SIZEZ=Math.round(zmudaSize());      // taille commune (Zapfino)
+    const SIZEZ=Math.round(zmudaSize());      // taille commune (Lavishly Yours)
     const SIZER=SIZEZ;                         // même taille pour Robin et Zmuda
     const gapL=Math.round(SIZEZ*0.05);        // espace entre les lettres d'un même mot
     const gapW=Math.round(SIZEZ*0.34);        // espace entre les mots (Robin / Zmuda)
     function measure(txt,px,fontFull){
-      // fontFull = chaîne complète (ex: '104px ZapfinoForteLTPro' ou '700 93px Quicksand')
+      // fontFull = chaîne complète (ex: '104px Lavishly Yours' ou '700 93px Quicksand')
       sigCtx.font=fontFull;sigCtx.textBaseline='alphabetic';sigCtx.textAlign='left';
       const letters=txt.split('').map(c=>({c,font:fontFull,px}));
       letters.forEach(l=>{const m=sigCtx.measureText(l.c);l.wd=m.width;l.bbL=m.actualBoundingBoxLeft||0;l.bbR=m.actualBoundingBoxRight||0;});
@@ -99,7 +99,7 @@ async function initSig(){
     x=x-gapL+gapW;
     segZ.letters.forEach(l=>{l.x=x;x+=l.wd+gapL;});
     const Wtotal=x-gapL;
-    // débordements d'encre globaux (ornements Zapfino à gauche/droite)
+    // débordements d'encre globaux (ornements de Lavishly Yours à gauche/droite)
     const all=[...segR.letters,...segZ.letters];
     const minL=Math.min(0,...all.map(l=>l.bbL));
     const maxR=Math.max(...all.map(l=>l.x+l.wd+l.bbR));
@@ -170,7 +170,7 @@ async function initSig(){
       sigCtx.restore();
     }
     /* Colorie une lettre au « crayon » (style coloriage, PAS un remplissage lisse).
-       Le tracé Zapfino est très fin : on ne « remplit » donc pas l'intérieur (il n'existe
+       Le tracé de la signature est très fin : on ne « remplit » donc pas l'intérieur (il n'existe
        presque pas) — on COLORIE PAR-DESSUS le trait comme au crayon sur un dessin au trait :
        chaque lettre reçoit une silhouette légèrement épaissie (glyphe + contour 2-3 px, comme
        un tracé à colorier), et on la remplit de hachures de crayon visibles : traits inclinés,
