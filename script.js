@@ -598,6 +598,54 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const nbC=new Float32Array(N), nbUp=new Float32Array(N), nbDn=new Float32Array(N);
   const prLo=new Float32Array(32), prHi=new Float32Array(32), prCnt=new Uint16Array(32); // cou de colonne
 
+  // Grille uniforme : les interactions SPH ne concernent que les particules proches.
+  // La cellule vaut H_SMOOTH ; deux particules dans un rayon de cohésion (1.3 cellules)
+  // peuvent donc être dans des cellules séparées de deux cases au maximum.
+  const GRID_COLS=Math.ceil(3.0/H_SMOOTH)+2;
+  const GRID_ROWS=Math.ceil(1.0/H_SMOOTH)+2;
+  const gridHead=new Int32Array(GRID_COLS*GRID_ROWS);
+  const gridNext=new Int32Array(MAX);
+  const MAX_PAIRS=MAX*(MAX-1)/2;
+  const pairI=new Uint16Array(MAX_PAIRS), pairJ=new Uint16Array(MAX_PAIRS);
+  const pairR2=new Float32Array(MAX_PAIRS);
+  let pairCount=0;
+
+  function rebuildNeighbors(radius2){
+    gridHead.fill(-1);
+    for(let i=0;i<P.length;i++){
+      const p=P[i];
+      const gx=Math.max(0,Math.min(GRID_COLS-1,Math.floor(p.x/H_SMOOTH)));
+      const gy=Math.max(0,Math.min(GRID_ROWS-1,Math.floor(p.y/H_SMOOTH)));
+      const cell=gx+gy*GRID_COLS;
+      gridNext[i]=gridHead[cell];
+      gridHead[cell]=i;
+    }
+    pairCount=0;
+    const cellRadius=Math.ceil(Math.sqrt(radius2)/H_SMOOTH);
+    for(let i=0;i<P.length;i++){
+      const a=P[i];
+      const gx=Math.max(0,Math.min(GRID_COLS-1,Math.floor(a.x/H_SMOOTH)));
+      const gy=Math.max(0,Math.min(GRID_ROWS-1,Math.floor(a.y/H_SMOOTH)));
+      for(let oy=-cellRadius;oy<=cellRadius;oy++){
+        const cy=gy+oy;
+        if(cy<0||cy>=GRID_ROWS)continue;
+        for(let ox=-cellRadius;ox<=cellRadius;ox++){
+          const cx=gx+ox;
+          if(cx<0||cx>=GRID_COLS)continue;
+          for(let j=gridHead[cx+cy*GRID_COLS];j>=0;j=gridNext[j]){
+            if(j<=i)continue;
+            const b=P[j];
+            const dx=b.x-a.x,dy=b.y-a.y;
+            const r2=dx*dx+dy*dy;
+            if(r2<radius2){
+              pairI[pairCount]=i;pairJ[pairCount]=j;pairR2[pairCount]=r2;pairCount++;
+            }
+          }
+        }
+      }
+    }
+  }
+
   function step(h){
     const h2=H_SMOOTH*H_SMOOTH;
     const cohR=H_SMOOTH*COH_RANGE, cohR2=cohR*cohR;
@@ -652,40 +700,34 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     else if(neckLatch>0){neckLatch--;}
     else{neckY=-1;}
 
-    // 2. Cohésion (tension de surface) : attire les particules proches
-    for(let i=0;i<P.length;i++){
-      for(let j=i+1;j<P.length;j++){
-        const a=P[i], b=P[j];
-        const dx=b.x-a.x, dy=b.y-a.y;
-        const r2=dx*dx+dy*dy;
-        if(r2>=cohR2 || r2<1e-10)continue;
-        const r=Math.sqrt(r2);
-        const w=1-r/cohR;
-        const f=COHESION*w*h;
-        const nx=dx/r, ny=dy/r;
-        a.vx+=f*nx; a.vy+=f*ny;
-        b.vx-=f*nx; b.vy-=f*ny;
-      }
+    // 2. Cohésion (tension de surface) : attire les particules proches.
+    // La grille évite de parcourir les paires trop éloignées.
+    rebuildNeighbors(cohR2);
+    for(let k=0;k<pairCount;k++){
+      const i=pairI[k],j=pairJ[k],a=P[i],b=P[j],r2=pairR2[k];
+      if(r2<1e-10)continue;
+      const r=Math.sqrt(r2);
+      const w=1-r/cohR;
+      const f=COHESION*w*h;
+      const nx=(b.x-a.x)/r, ny=(b.y-a.y)/r;
+      a.vx+=f*nx; a.vy+=f*ny;
+      b.vx-=f*nx; b.vy-=f*ny;
     }
 
     // 3. Densités (noyau (1-q)^2 et (1-q)^3)
     for(let i=0;i<P.length;i++){density[i]=0;nearDensity[i]=0;nbC[i]=0;nbUp[i]=0;nbDn[i]=0;}
-    for(let i=0;i<P.length;i++){
-      for(let j=i+1;j<P.length;j++){
-        const a=P[i], b=P[j];
-        const dx=b.x-a.x, dy=b.y-a.y;
-        const r2=dx*dx+dy*dy;
-        if(r2>=h2)continue;
-        const r=Math.sqrt(r2)||1e-6;
-        const q=r/H_SMOOTH;
-        const aq=1-q, aq2=aq*aq;
-        density[i]+=aq2; density[j]+=aq2;
-        const aq3=aq2*aq;
-        nearDensity[i]+=aq3; nearDensity[j]+=aq3;
-        nbC[i]++; nbC[j]++;
-        if(b.y>a.y){nbUp[i]++; nbDn[j]++;}
-        else{nbDn[i]++; nbUp[j]++;}
-      }
+    for(let k=0;k<pairCount;k++){
+      const i=pairI[k],j=pairJ[k],a=P[i],b=P[j],r2=pairR2[k];
+      if(r2>=h2)continue;
+      const r=Math.sqrt(r2)||1e-6;
+      const q=r/H_SMOOTH;
+      const aq=1-q, aq2=aq*aq;
+      density[i]+=aq2; density[j]+=aq2;
+      const aq3=aq2*aq;
+      nearDensity[i]+=aq3; nearDensity[j]+=aq3;
+      nbC[i]++; nbC[j]++;
+      if(b.y>a.y){nbUp[i]++; nbDn[j]++;}
+      else{nbDn[i]++; nbUp[j]++;}
     }
 
     // 4. Pression : densité de repos effective dépend de la température (expansion thermique)
@@ -699,30 +741,26 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     const maxDisp=0.015;
     for(let pass=0;pass<2;pass++){
       for(let i=0;i<P.length;i++){dispX[i]=0;dispY[i]=0;}
-      for(let i=0;i<P.length;i++){
-        for(let j=i+1;j<P.length;j++){
-          const a=P[i], b=P[j];
-          const dx=b.x-a.x, dy=b.y-a.y;
-          const r2=dx*dx+dy*dy;
-          if(r2>=h2)continue;
-          const r=Math.sqrt(r2)||1e-6;
-          const q=r/H_SMOOTH, aq=1-q;
-          const nx=dx/r, ny=dy/r;
-          // Fracture Plateau-Rayleigh : si un cou de colonne est détecté, on coupe
-          // l'interaction (pression + tension) entre les particules de part et d'autre
-          // du plan du cou → le "film" casse, la colonne se sépare en deux.
-          if(neckY>=0){
-            const ay=a.y-neckY, by=b.y-neckY;
-            if(ay*by<0 && Math.abs(ay)<PR_FRAC_TOL+0.06 && Math.abs(by)<PR_FRAC_TOL+0.06)continue;
-          }
-          // j pousse i ; i pousse j
-          const near_i=aq*aq*K_NEAR*nearDensity[i];
-          const near_j=aq*aq*K_NEAR*nearDensity[j];
-          const Di=(pressure[j]+near_j)*aq*0.5;
-          const Dj=(pressure[i]+near_i)*aq*0.5;
-          dispX[i]-=Di*nx; dispY[i]-=Di*ny;
-          dispX[j]+=Dj*nx; dispY[j]+=Dj*ny;
+      for(let k=0;k<pairCount;k++){
+        const i=pairI[k],j=pairJ[k],a=P[i],b=P[j],r2=pairR2[k];
+        if(r2>=h2)continue;
+        const r=Math.sqrt(r2)||1e-6;
+        const q=r/H_SMOOTH, aq=1-q;
+        const nx=(b.x-a.x)/r, ny=(b.y-a.y)/r;
+        // Fracture Plateau-Rayleigh : si un cou de colonne est détecté, on coupe
+        // l'interaction (pression + tension) entre les particules de part et d'autre
+        // du plan du cou → le "film" casse, la colonne se sépare en deux.
+        if(neckY>=0){
+          const ay=a.y-neckY, by=b.y-neckY;
+          if(ay*by<0 && Math.abs(ay)<PR_FRAC_TOL+0.06 && Math.abs(by)<PR_FRAC_TOL+0.06)continue;
         }
+        // j pousse i ; i pousse j
+        const near_i=aq*aq*K_NEAR*nearDensity[i];
+        const near_j=aq*aq*K_NEAR*nearDensity[j];
+        const Di=(pressure[j]+near_j)*aq*0.5;
+        const Dj=(pressure[i]+near_i)*aq*0.5;
+        dispX[i]-=Di*nx; dispY[i]-=Di*ny;
+        dispX[j]+=Dj*nx; dispY[j]+=Dj*ny;
       }
       for(let i=0;i<P.length;i++){
         let dx=dispX[i], dy=dispY[i];
@@ -760,19 +798,17 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       }
     }
 
-    // 6. Viscosité (XSPH) : lissage des vitesses entre voisins
-    for(let i=0;i<P.length;i++){
-      for(let j=i+1;j<P.length;j++){
-        const a=P[i], b=P[j];
-        const dx=b.x-a.x, dy=b.y-a.y;
-        const r2=dx*dx+dy*dy;
-        if(r2>=h2)continue;
-        const r=Math.sqrt(r2)||1e-6;
-        const q=r/H_SMOOTH;
-        const w=(1-q)*VISCOSITY*h;
-        a.vx+=w*(b.vx-a.vx); a.vy+=w*(b.vy-a.vy);
-        b.vx+=w*(a.vx-b.vx); b.vy+=w*(a.vy-b.vy);
-      }
+    // 6. Viscosité (XSPH) : lissage des vitesses entre voisins.
+    // Les positions ayant changé pendant la relaxation, on reconstruit la grille.
+    rebuildNeighbors(cohR2);
+    for(let k=0;k<pairCount;k++){
+      const i=pairI[k],j=pairJ[k],a=P[i],b=P[j],r2=pairR2[k];
+      if(r2>=h2)continue;
+      const r=Math.sqrt(r2)||1e-6;
+      const q=r/H_SMOOTH;
+      const w=(1-q)*VISCOSITY*h;
+      a.vx+=w*(b.vx-a.vx); a.vy+=w*(b.vy-a.vy);
+      b.vx+=w*(a.vx-b.vx); b.vy+=w*(a.vy-b.vy);
     }
 
     // 7. Collisions (sol, murs, plafond) — absorbantes + friction au sol
@@ -787,6 +823,10 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       // (plus de couche d'amortissement au sol : la réconciliation PBD gère le flick)
       if(p.y>1-p.r){p.y=1-p.r; if(p.vy>0){p.vy=-p.vy*RESTITUTION;} p.vx*=0.90;}
     }
+
+    // Les collisions peuvent corriger les positions : la conduction doit utiliser les
+    // voisins de la géométrie finale du sous-pas, pas ceux d'avant le contact avec le sol.
+    rebuildNeighbors(cohR2);
 
     // 8. Thermique : PLAQUE au sol qui chauffe vers le chaud, et refroidissement par
     //    RELAXATION vers le froid (proportionnel à T). Ce couplage fond-chaud / sommet-froid
@@ -817,17 +857,13 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     // Conduction ANISOTROPE : forte sur l'axe vertical (la colonne au-dessus des spots
     // chauffe et devient légère → monte), faible sur l'axe horizontal (le pool reste froid
     // et ancré). La chaleur monte par conduction dans les colonnes, pas latéralement.
-    for(let i=0;i<P.length;i++){
-      for(let j=i+1;j<P.length;j++){
-        const a=P[i], b=P[j];
-        const dx=b.x-a.x, dy=b.y-a.y;
-        const r2=dx*dx+dy*dy;
-        if(r2>=h2)continue;
-        const r=Math.sqrt(r2)||1e-6;
-        const vert=Math.abs(dy)/r;                    // 1 = voisin au-dessus/en-dessous, 0 = latéral
-        const transfer=CONDUCT*(1.0+(CONDUCT_VBIAS-1.0)*vert)*(b.temp-a.temp)*h;
-        a.temp+=transfer; b.temp-=transfer;
-      }
+    for(let k=0;k<pairCount;k++){
+      const i=pairI[k],j=pairJ[k],a=P[i],b=P[j],r2=pairR2[k];
+      if(r2>=h2)continue;
+      const r=Math.sqrt(r2)||1e-6;
+      const vert=Math.abs(b.y-a.y)/r;                 // 1 = voisin au-dessus/en-dessous, 0 = latéral
+      const transfer=CONDUCT*(1.0+(CONDUCT_VBIAS-1.0)*vert)*(b.temp-a.temp)*h;
+      a.temp+=transfer; b.temp-=transfer;
     }
   }
 
