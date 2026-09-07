@@ -6,25 +6,48 @@
 :where(p,h1,h2,h3,h4,h5,h6,li,dd,blockquote,td,th){overflow-wrap:anywhere}
 
 :root{
+  /* ============================================================
+     CHARTE DE DÉGRADÉS — tout le site se reconfigure ici.
+     Change les DEUX PÔLES (froid → chaud) pour rethémer :
+       --ramp-cold  = extrémité froide (glacier)
+       --ramp-hot   = extrémité chaude (cramoisi)
+     Les intermédiaires (--ramp-mid, --ramp-soft, …) restent
+     ajustables individuellement si besoin.
+     ============================================================ */
+  --ramp-cold:#4f8db8;      /* PÔLE FROID  — bleu glacier (base traits / frises) */
+  --ramp-mid:#3cb8d4;       /* intermédiaire — cyan vif (--bcyan) */
+  --ramp-soft:#74bccb;      /* intermédiaire — teal glacier (--cyan) */
+  --ramp-ice:#bcd6ea;       /* intermédiaire — glace claire (--ice), textes */
+  --ramp-snow:#f0f6ff;      /* intermédiaire — blanc glacier (départ dégradés texte) */
+  --ramp-flare:#e05555;     /* intermédiaire — rouge clair (--red), pic texte */
+  --ramp-hot:#b32247;       /* PÔLE CHAUD  — cramoisi (--crimson) */
+  /* Déclinaisons « vives » du graphe d'expérience (fond sombre) : DÉRIVÉES des pôles et
+     intermédiaires pour que tout le site suive le rethème (plus de hex en dur). */
+  --ramp-hot-bright:var(--ramp-hot);   /* présent (haut du graphe) = pôle chaud */
+  --ramp-hot-soft:color-mix(in srgb,var(--ramp-hot) 85%,var(--ramp-mid));  /* transition chaude */
+  --ramp-cold-bright:var(--ramp-cold); /* passé (bas du graphe) = pôle froid */
+  --ramp-cold-soft:color-mix(in srgb,var(--ramp-mid) 85%,var(--ramp-cold));/* transition froide */
+  --ramp-cold-pale:color-mix(in srgb,var(--ramp-mid) 60%,var(--ramp-cold));/* jalon le plus ancien */
+
   --bg:#000000;            /* fond noir pur */
   --bg2:#05050a;
   --bg3:rgba(0,0,0,.6);
   --txt:#e8effb;            /* texte principal — légèrement adouci */
   --muted:#7d93b4;          /* texte secondaire — foncé pour rester lisible sur lave */
-  --blue:#4f8db8;          /* bleu glacier — foncé */
+  --blue:var(--ramp-cold); /* bleu glacier — alias du pôle froid */
   --blue-2:#7aaccc;
   --blue-3:#355f8f;
   --sky:#9cc2e0;
-  --cyan:#74bccb;          /* teal glacier — foncé */
+  --cyan:var(--ramp-soft); /* teal glacier — alias */
   --purple:#8d97bc;        /* pervenche douce — foncée */
-  --ice:#bcd6ea;           /* glace claire — foncée */
+  --ice:var(--ramp-ice);   /* glace claire — alias */
   --rose:#d96d9a;          /* rose vif — foncé */
   --amber:#e08f3d;         /* orange — foncé */
   --mint:#52b368;          /* vert — foncé */
-  --red:#e05555;           /* rouge — foncé */
-  --crimson:#b32247;       /* rouge cramoisi — foncé */
+  --red:var(--ramp-flare); /* rouge clair — alias */
+  --crimson:var(--ramp-hot);/* rouge cramoisi — alias du pôle chaud */
   --violet:#967fe0;        /* violet — foncé */
-  --bcyan:#3cb8d4;         /* cyan vif — foncé */
+  --bcyan:var(--ramp-mid); /* cyan vif — alias */
   --line:rgba(140,205,218,.13);
   --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
   --sans:"Quicksand","Segoe UI",system-ui,sans-serif;
@@ -44,9 +67,9 @@ body{margin:0;color:var(--txt);font-family:var(--sans);background:#000;line-heig
 body>.hero,body>.marquee,body>section,body>.footer{position:relative;z-index:1}
 /* Teinte charte (bleu glacier en haut, cramoisi en bas) : petite couleur qui rappelle le thème */
 .lava-tint{position:absolute;inset:0;z-index:1;pointer-events:none;mix-blend-mode:screen;opacity:.6;background:
-  radial-gradient(120% 88% at 16% 8%,rgba(92,148,188,.32) 0%,transparent 55%),
-  radial-gradient(130% 92% at 84% 94%,rgba(179,34,71,.28) 0%,transparent 58%),
-  linear-gradient(135deg,rgba(79,141,184,.13),rgba(179,34,71,.10))}
+  radial-gradient(120% 88% at 16% 8%,color-mix(in srgb,var(--ramp-cold) 32%,transparent) 0%,transparent 55%),
+  radial-gradient(130% 92% at 84% 94%,color-mix(in srgb,var(--ramp-hot) 28%,transparent) 0%,transparent 58%),
+  linear-gradient(135deg,color-mix(in srgb,var(--ramp-cold) 13%,transparent),color-mix(in srgb,var(--ramp-hot) 10%,transparent))}
 /* Voile sombre léger au-dessus de la lave floutée : le contenu reste lisible sans éteindre la couleur */
 #lava-bg::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;background:linear-gradient(180deg,rgba(2,4,10,.10) 0%,rgba(2,4,10,.05) 45%,rgba(2,4,10,.16) 80%,rgba(2,4,10,.30) 100%)}
 
@@ -70,7 +93,7 @@ a{color:inherit;text-decoration:none}
 @media(max-width:600px){#fps-counter{top:10px;right:12px;padding:5px 8px;font-size:.6rem}}
 .scroll-rail{position:fixed;z-index:90;right:24px;top:50%;transform:translateY(-50%);width:112px;height:132px;pointer-events:none;color:var(--muted);font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;text-transform:uppercase}
 .scroll-rail-line{position:absolute;right:10px;top:0;bottom:0;width:1px;background:linear-gradient(var(--cyan),rgba(140,205,218,.16) 58%,var(--crimson))}
-.scroll-rail-dot{position:absolute;right:6px;top:0;width:9px;height:9px;border-radius:50%;background:var(--crimson);box-shadow:0 0 14px rgba(212,42,84,.75);transition:top .45s cubic-bezier(.2,.8,.2,1),background .3s}
+.scroll-rail-dot{position:absolute;right:6px;top:0;width:9px;height:9px;border-radius:50%;background:var(--crimson);box-shadow:0 0 14px color-mix(in srgb,var(--ramp-hot-bright) 75%,transparent);transition:top .45s cubic-bezier(.2,.8,.2,1),background .3s}
 .scroll-rail-label{position:absolute;right:25px;top:-2px;white-space:nowrap;color:var(--sky);transition:opacity .2s;background:rgba(7,12,24,.48);padding:2px 6px;border-radius:6px;border:1px solid var(--line);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 @media(max-width:900px){.scroll-rail{display:none}}
 
@@ -84,8 +107,8 @@ a{color:inherit;text-decoration:none}
 .hero-content{position:relative;z-index:2;width:100%;display:grid;grid-template-columns:1.2fr .8fr;gap:60px;align-items:center}
 @media(max-width:900px){.hero-content{grid-template-columns:1fr;gap:40px}}
 .hero-content,.hero-left,.hero h1{min-width:0;max-width:100%}
-/* Signature « Robin Zmuda » : tout est dessiné dans le canvas (Robin en Zapfino,
-   Zmuda en Quicksand gras) et écrit au pinceau lettre par lettre à la suite.
+/* Signature « Robin Zmuda » : tout est dessiné dans le canvas (les deux mots en Lavishly Yours)
+   et écrit au pinceau lettre par lettre à la suite, sans temps mort entre les lettres.
    La taille d'affichage est posée en JS (inline width/height) — ici juste max-width. */
 .hero h1 canvas{display:block;width:auto;height:auto;max-width:100%;margin-bottom:-3px}
 .hero-crumb{font-family:var(--mono);font-size:.8rem;color:var(--muted);letter-spacing:.1em;display:flex;align-items:center;gap:10px;margin-bottom:20px;}
@@ -99,7 +122,7 @@ a{color:inherit;text-decoration:none}
 .hero-chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}
 .chip{font-family:var(--mono);font-size:.72rem;letter-spacing:.04em;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:rgba(7,12,24,.42);color:var(--sky);transition:transform .2s,border-color .2s,color .2s;backdrop-filter:blur(18px) saturate(1.3);-webkit-backdrop-filter:blur(18px) saturate(1.3)}
 .chip:hover{border-color:var(--blue);color:var(--blue-2);transform:translateY(-2px)}
-.chip.key{border-color:rgba(212,42,84,.55);color:var(--crimson)}
+.chip.key{border-color:color-mix(in srgb,var(--ramp-hot-bright) 55%,transparent);color:var(--crimson)}
 .chip.key .dot{background:var(--crimson);animation:pulse 2s ease-in-out infinite}
 .chip .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--cyan);margin-right:6px;animation:pulse 2s ease-in-out infinite}
 .hero-cta{margin-top:30px;display:flex;gap:14px;flex-wrap:wrap}
@@ -151,41 +174,125 @@ html.is-scrolling .marquee-track{animation-play-state:paused}
 .ico{display:inline-grid;place-items:center;width:40px;height:40px;color:var(--ice);background:rgba(140,205,218,.08);border:1px solid rgba(140,205,218,.14);border-radius:12px;flex:0 0 auto}
 .ico svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 @keyframes icoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-.acard:hover .ico{color:var(--bcyan);border-color:rgba(140,205,218,.35)}
+.sk:hover .ico,.soc:hover .ico{color:var(--bcyan);border-color:rgba(140,205,218,.35)}
 @keyframes icoSway{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(6deg)}}
 .f1 svg,.fi svg{animation:icoFloat 3.2s ease-in-out infinite}
 .f4 svg{animation:icoSway 4.2s ease-in-out infinite}
 
-/* ---- ABOUT ---- */
+/* ---- ABOUT : Bento vivant (panneaux + icônes animées + texte) ---- */
 .about{padding-top:72px}
-.about-inner{display:grid;grid-template-columns:1fr;gap:34px}
-.about-text{position:relative;padding:18px 22px;border-radius:14px}
-@media(max-width:900px){.about-inner{gap:26px}}
+.bento{display:grid;grid-template-columns:1.5fr 1fr 1fr;grid-template-rows:auto auto auto;gap:14px;margin-top:6px}
+.bcell{position:relative;border:1px solid rgba(140,205,218,.13);background:rgba(6,10,20,.42);border-radius:14px;padding:20px 22px;backdrop-filter:blur(22px) saturate(1.35);-webkit-backdrop-filter:blur(22px) saturate(1.35);transition:transform .35s cubic-bezier(.2,.7,.2,1),border-color .35s,box-shadow .35s;overflow:hidden}
+.bcell:hover{transform:translateY(-4px);border-color:color-mix(in srgb,var(--ramp-mid) 55%,transparent);box-shadow:0 20px 46px -20px rgba(93,159,201,.4)}
+/* Placement explicite : identité en large (2/3, rangée 1), Formation à droite */
+.bcell.identity{grid-column:1/3;grid-row:1;display:flex;flex-direction:column;justify-content:center;gap:16px}
+.bcell.c-formation{grid-column:3;grid-row:1}
+/* Rangée 2 : Parcours / Réseau / Certifications */
+.bcell.c-parcours{grid-column:1;grid-row:2}
+.bcell.c-reseau{grid-column:2;grid-row:2}
+.bcell.c-certs{grid-column:3;grid-row:2}
+/* Rangée 3 : Expérience en large + Algorithmique */
+.bcell.exp{grid-column:1/3;grid-row:3}
+.bcell.alg{grid-column:3;grid-row:3}
+@media(max-width:1100px){
+  .bento{grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto auto}
+  .bcell.identity{grid-column:1/-1;grid-row:1}
+  .bcell.c-formation,.bcell.c-parcours,.bcell.c-reseau,.bcell.c-certs,.bcell.exp,.bcell.alg{grid-column:auto;grid-row:auto}
+  .bcell.exp{grid-column:1/-1}
+  .bcell.alg{grid-column:1/-1}
+}
+@media(max-width:900px){.bento{grid-template-columns:1fr}}
+.bhead{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.bhead h3{margin:0;font-size:1.02rem;font-weight:700;color:var(--sky)}
+.bcell:hover .bhead h3{color:var(--bcyan)}
+.btext{margin:0;font-size:.9rem;color:#c2d2ea;line-height:1.6;opacity:.92}
+.btext strong{color:var(--ice);opacity:1;font-weight:600}
+/* pastille icône animée */
+.bicon{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:12px;flex:0 0 auto;color:var(--ice);background:rgba(140,205,218,.08);border:1px solid rgba(140,205,218,.14)}
+.bicon svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.bcell:hover .bicon{color:var(--bcyan);border-color:color-mix(in srgb,var(--ramp-mid) 40%,transparent)}
+/* micro-animations d'icônes : douces, pas jeu vidéo */
+@keyframes icoFloatSlow{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes icoSwaySlow{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
+@keyframes icoBreath{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+@keyframes glowPulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ramp-mid) 35%,transparent)}50%{box-shadow:0 0 0 9px color-mix(in srgb,var(--ramp-mid) 0%,transparent)}}
+.an-float{animation:icoFloatSlow 3.2s ease-in-out infinite}
+.an-sway{animation:icoSwaySlow 4.2s ease-in-out infinite}
+.an-breathe{animation:icoBreath 3.6s ease-in-out infinite}
+.an-glow{animation:glowPulse 2.6s ease-in-out infinite;color:var(--bcyan)}
+.an-breathe.an-glow{animation:icoBreath 3.6s ease-in-out infinite,glowPulse 2.6s ease-in-out infinite}
+/* logo flocon de neige (identité) : rotation lente et élégante */
+.snow-logo{display:inline-grid;place-items:center;width:54px;height:54px;border-radius:15px;flex:0 0 auto;color:var(--sky);background:radial-gradient(70% 70% at 30% 25%,rgba(140,205,218,.18),rgba(6,10,20,.4));border:1px solid rgba(140,205,218,.3);box-shadow:0 12px 28px -14px rgba(93,159,201,.5)}
+.snow-logo svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round;animation:snowSpin 26s linear infinite}
+@keyframes snowSpin{to{transform:rotate(360deg)}}
+.bcell:hover .snow-logo{border-color:color-mix(in srgb,var(--ramp-mid) 50%,transparent);color:#cfe2f8}
+.identity-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.identity-name{font-size:clamp(1.5rem,3.2vw,2rem);font-weight:800;letter-spacing:.01em;line-height:1.15}
+.identity-name .g{background:linear-gradient(120deg,var(--ramp-snow),var(--ramp-ice) 38%,var(--ramp-mid) 72%,var(--ramp-flare));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.identity-role{font-size:.74rem;letter-spacing:.2em;text-transform:uppercase;color:var(--sky);margin-top:2px}
+.identity-text{font-size:.98rem;line-height:1.7;max-width:56ch}
+.chiprow{display:flex;flex-wrap:wrap;gap:6px}
+.bexp-link{margin-top:14px;display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;padding:10px 16px;border-radius:10px;border:1px solid color-mix(in srgb,var(--ramp-mid) 40%,transparent);color:var(--sky);background:color-mix(in srgb,var(--ramp-mid) 8%,transparent);transition:border-color .25s,color .25s,transform .25s,box-shadow .25s}
+.bexp-link:hover{border-color:var(--bcyan);color:var(--bcyan);transform:translateY(-2px);box-shadow:0 12px 28px -14px rgba(93,159,201,.45)}
+.bexp-link .arr{transition:transform .3s}
+.bexp-link:hover .arr{transform:translateX(4px)}
+/* ---- Frise chronologique VERTICALE (trait + points) : Formation / Expérience ---- */
+.tlv{position:relative;display:flex;flex-direction:column;gap:0;padding:4px 0 2px}
+/* trait vertical dégradé glacier → cramoisi, sur la colonne des points */
+.tlv::before{content:"";position:absolute;top:8px;bottom:8px;left:7px;width:2px;border-radius:2px;background:linear-gradient(180deg,var(--blue),var(--bcyan) 45%,var(--crimson));opacity:.8}
+.tlv-item{position:relative;padding:8px 0 8px 26px;min-width:0}
+.tlv-dot{position:absolute;left:0;top:11px;width:16px;height:16px;border-radius:50%;background:rgba(6,10,20,.95);border:2.5px solid var(--bcyan);box-shadow:0 0 0 3px color-mix(in srgb,var(--ramp-mid) 12%,transparent),0 3px 8px rgba(0,0,0,.5);z-index:1;transition:border-color .3s,box-shadow .3s}
+.tlv-item:hover .tlv-dot{border-color:var(--blue-2)}
+/* point « actuel / dernier » : cramoisi pulsant */
+.tlv-dot.tlv-now{border-color:var(--crimson);box-shadow:0 0 0 3px color-mix(in srgb,var(--ramp-hot) 14%,transparent),0 0 14px color-mix(in srgb,var(--ramp-hot) 55%,transparent);animation:tlPulse 2.4s ease-in-out infinite}
+@keyframes tlPulse{0%,100%{box-shadow:0 0 0 3px color-mix(in srgb,var(--ramp-hot) 14%,transparent),0 0 6px color-mix(in srgb,var(--ramp-hot) 40%,transparent)}50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--ramp-hot) 8%,transparent),0 0 20px color-mix(in srgb,var(--ramp-hot) 70%,transparent)}}
+.tlv-when{font-family:var(--mono);font-size:.62rem;letter-spacing:.08em;color:var(--bcyan);text-transform:uppercase}
+.tlv-lbl{font-family:var(--mono);font-size:.78rem;font-weight:700;letter-spacing:.03em;color:var(--ice);line-height:1.3;margin-top:3px;overflow-wrap:anywhere}
+.tlv-sub{font-size:.68rem;color:var(--muted);line-height:1.4;margin-top:2px;overflow-wrap:anywhere}
+.tlv-sub b{color:var(--sky);font-weight:600}
+/* ---- Tree git : panneau Expérience (graphe SVG + rangées texte alignées) ---- */
+.gtree{position:relative;border:1px solid rgba(140,205,218,.16);background:rgba(5,9,18,.72);border-radius:12px;overflow:hidden;margin-top:2px}
+.gbody{position:relative;display:flex}
+.ggraph{position:relative;flex:0 0 148px}
+@media(max-width:560px){.ggraph{flex-basis:96px}}
+.ggraph svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.grows{flex:1;min-width:0}
+.grow{min-height:58px;display:flex;align-items:center;padding:4px 14px 4px 4px}
+.grow .gx{line-height:1.25;min-width:0}
+.grow .when{font-size:.58rem;letter-spacing:.05em;color:var(--muted);text-transform:uppercase;display:inline-block;margin-right:8px}
+.grow .msg{font-size:.8rem;font-weight:700;color:#dbe9f7;letter-spacing:.01em}
+.grow .sub{font-size:.64rem;color:var(--muted);display:block;margin-top:2px}
+.grow.head{background:linear-gradient(90deg,color-mix(in srgb,var(--ramp-hot) 12%,transparent),color-mix(in srgb,var(--ramp-hot) 2%,transparent) 60%,transparent);border-radius:8px}
+.gtag{display:inline-block;font-size:.5rem;letter-spacing:.05em;border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:2px;background:color-mix(in srgb,var(--ramp-mid) 14%,transparent);border:1px solid color-mix(in srgb,var(--ramp-mid) 40%,transparent);color:var(--sky)}
+.gtag.red{background:color-mix(in srgb,var(--ramp-hot) 18%,transparent);border-color:color-mix(in srgb,var(--ramp-hot) 55%,transparent);color:var(--ramp-hot-bright)}
+.gfoot{padding:8px 16px 10px;border-top:1px solid rgba(140,205,218,.1);font-size:.62rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:3px 18px;margin-top:6px}
+.gfoot b{color:var(--sky);font-weight:500}
+.gfoot .ok{color:#34d399}
+@media(max-width:560px){
+  .grow{min-height:52px}
+  .grow .msg{font-size:.72rem}
+  .grow .when{font-size:.52rem;margin-right:4px}
+  .gtag{display:none}
+}
+.tlv-mention{margin:6px 0 0 26px;font-size:.72rem;color:var(--muted);line-height:1.5}
+.tlv-mention b{color:var(--sky);font-weight:600}
+@media(max-width:900px){.tlv::before{left:6px}}
+.pill{display:inline-block;font-family:var(--mono);font-size:.62rem;letter-spacing:.05em;border-radius:99px;padding:.28rem .7rem;border:1px solid rgba(140,205,218,.24);color:var(--sky);background:rgba(6,10,20,.4)}
+.pill.ok{border-color:rgba(52,211,153,.5);color:#34d399}
+.pill.cour{border-color:rgba(224,143,61,.5);color:var(--amber)}
 .section-tag{font-family:var(--mono);font-size:.85rem;letter-spacing:.2em;text-transform:uppercase;color:var(--crimson);display:flex;align-items:center;gap:12px;margin-bottom:14px}
 .section-tag::before{content:"";width:28px;height:1px;background:linear-gradient(90deg,var(--blue),var(--crimson))}
-.section-title{position:relative;font-size:clamp(2.3rem,5vw,3.8rem);font-weight:700;margin:0 0 24px;background:linear-gradient(135deg,#f0f6ff 10%,var(--ice) 35%,var(--bcyan) 55%,var(--crimson) 90%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;;line-height:1.1}
+.section-title{position:relative;font-size:clamp(2.3rem,5vw,3.8rem);font-weight:700;margin:0 0 24px;background:linear-gradient(135deg,var(--ramp-snow) 10%,var(--ice) 35%,var(--bcyan) 55%,var(--crimson) 90%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;;line-height:1.1}
 .section-title::after{content:"";display:block;width:0;height:1px;margin-top:12px;background:linear-gradient(90deg,var(--bcyan),var(--crimson));opacity:0;transition:width .7s ease,opacity .3s}
 .section-live .section-title::after{width:min(180px,38%);opacity:.8}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.001ms!important}
   .marquee-track{animation:none}
 }
-.section-live .acard.in,.section-live .sk.in,.section-live .pcard.in,.section-live .soc.in{animation:sectionCardPop .65s cubic-bezier(.2,.8,.2,1) both}
-.section-live .acard:nth-child(2),.section-live .sk:nth-child(2),.section-live .pcard:nth-child(2),.section-live .soc:nth-child(2){animation-delay:.06s}
-.section-live .acard:nth-child(3),.section-live .sk:nth-child(3),.section-live .pcard:nth-child(3),.section-live .soc:nth-child(3){animation-delay:.12s}
+.section-live .bcell.in,.section-live .sk.in,.section-live .pcard.in,.section-live .soc.in{animation:sectionCardPop .65s cubic-bezier(.2,.8,.2,1) both}
+.section-live .bcell:nth-child(2),.section-live .sk:nth-child(2),.section-live .pcard:nth-child(2),.section-live .soc:nth-child(2){animation-delay:.06s}
+.section-live .bcell:nth-child(3),.section-live .sk:nth-child(3),.section-live .pcard:nth-child(3),.section-live .soc:nth-child(3){animation-delay:.12s}
 @keyframes sectionCardPop{from{opacity:.42;transform:translateY(14px)}to{opacity:1;transform:none}}
-.about-text p{color:var(--txt);opacity:.85;margin:0 0 14px;font-size:1.02rem}
-.about-text strong{color:var(--ice);opacity:1;font-weight:600}
-.about-text .lead{font-size:1.1rem;opacity:.95;line-height:1.7}
-.about-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px}
-@media(max-width:600px){.about-cards{grid-template-columns:1fr}}
-.acard{background:rgba(6,10,20,.40);border:1px solid rgba(140,205,218,.13);padding:18px 20px;transition:transform .35s cubic-bezier(.2,.7,.2,1),box-shadow .35s,border-color .35s;position:relative;backdrop-filter:blur(22px) saturate(1.35);-webkit-backdrop-filter:blur(22px) saturate(1.35)}
-.acard:hover{transform:translateY(-3px)}
-.acard .ico{font-size:1.4rem;width:40px;height:40px}
-.acard h4{margin:8px 0 8px;font-size:.92rem;font-weight:700;color:var(--sky)}
-.acard ul{margin:0;padding:0;list-style:none;font-size:.9rem;color:var(--txt);opacity:.82}
-.acard li{margin:0 0 6px;padding-left:16px;position:relative}
-.acard li::before{content:"›";position:absolute;left:0;color:var(--cyan);font-weight:700}
 
 /* ---- SKILLS ---- */
 .skills-section{padding-top:52px}

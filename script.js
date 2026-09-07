@@ -57,18 +57,20 @@ window.addEventListener('resize',()=>{sectionPositions.forEach(item=>{item.top=i
 })();
 updateScrollState();
 
-/* ---- Signature « Robin Zmuda » (canvas calligraphique) — tracé PUIS remplissage ----
-   Chaque lettre est écrite avec un pinceau (setLineDash qui progresse), les DEUX mots en Zapfino,
-   dans la continuité : d'abord TOUTES les lettres en trait seul, puis un « crayon » les remplit
-   une à une. Le canvas est recadré sur l'encre réelle ; tailles cohérentes et responsives. */
+/* ---- Signature « Robin Zmuda » (canvas calligraphique) — écriture au pinceau ----
+   Les DEUX mots sont écrits en Lavishly Yours avec un pinceau (setLineDash qui progresse),
+   SANS temps mort entre les lettres : la durée de chaque lettre est proportionnelle à son tracé
+   réel (mesuré), donc la pointe du pinceau ne s'arrête jamais. Le tracé reste en trait fin,
+   sans remplissage. Le canvas est recadré sur l'encre réelle ; tailles cohérentes et
+   responsives. */
 const sigC=document.getElementById('sig'),sigCtx=sigC.getContext('2d'),DPR=Math.min(devicePixelRatio||1,2);
 async function initSig(){
-  /* Polices : ZapfinoExtraLT-Four (calligraphie, idem live) — les DEUX mots dans cette police */
+  /* Police : Lavishly Yours (calligraphie, chargée localement) — les DEUX mots dans cette police */
   let ok=false;
-  try{const f=new FontFace('ZapfinoForteLTPro','url(./assets/font/ZapfinoExtraLT-Four.otf)');await f.load();document.fonts.add(f);ok=true;}catch(e){}
-  const famC=ok?'ZapfinoForteLTPro':'cursive';
-  const txtR='Robin';        // calligraphié en Zapfino
-  const txtZ='Zmuda';        // calligraphié en Zapfino (même police que Robin)
+  try{const f=new FontFace('Lavishly Yours','url(./assets/font/LavishlyYours-Regular.ttf)');await f.load();document.fonts.add(f);ok=true;}catch(e){}
+  const famC=ok?'Lavishly Yours':'cursive';
+  const txtR='Robin';        // calligraphié en Lavishly Yours
+  const txtZ='Zmuda';        // calligraphié en Lavishly Yours (même police que Robin)
   let active=false,raf=0,ld=null;
   const inView=()=>{const r=sigC.getBoundingClientRect();return r.top<window.innerHeight&&r.bottom>0;};
   /* Taille de « Zmuda » : même clamp que l'ancien .zmuda CSS (rem→px calculé en JS) */
@@ -77,29 +79,30 @@ async function initSig(){
     const vw=window.innerWidth;
     return Math.max(2.8*rem,Math.min(5.8*rem,vw*0.08));
   };
-  /* Mesure + mise en page : les deux mots en Zapfino, même taille, sur la même baseline */
+  /* Mesure + mise en page : les deux mots en Lavishly Yours, même taille, sur la même baseline */
   function layout(){
-    const SIZEZ=Math.round(zmudaSize());      // taille commune (Zapfino)
+    const SIZEZ=Math.round(zmudaSize());      // taille commune (Lavishly Yours)
     const SIZER=SIZEZ;                         // même taille pour Robin et Zmuda
     const gapL=Math.round(SIZEZ*0.05);        // espace entre les lettres d'un même mot
     const gapW=Math.round(SIZEZ*0.34);        // espace entre les mots (Robin / Zmuda)
     function measure(txt,px,fontFull){
-      // fontFull = chaîne complète (ex: '104px ZapfinoForteLTPro' ou '700 93px Quicksand')
+      // fontFull = chaîne complète (ex: '104px "Lavishly Yours"')
       sigCtx.font=fontFull;sigCtx.textBaseline='alphabetic';sigCtx.textAlign='left';
       const letters=txt.split('').map(c=>({c,font:fontFull,px}));
       letters.forEach(l=>{const m=sigCtx.measureText(l.c);l.wd=m.width;l.bbL=m.actualBoundingBoxLeft||0;l.bbR=m.actualBoundingBoxRight||0;});
       const mt=sigCtx.measureText(txt);
       return {letters,ascent:mt.actualBoundingBoxAscent||px*.72,descent:mt.actualBoundingBoxDescent||px*.16,px};
     }
-    const segR=measure(txtR,SIZER,SIZER+'px '+famC);
-    const segZ=measure(txtZ,SIZEZ,SIZEZ+'px '+famC);
+    const famQ=/"/.test(famC)?famC:'"'+famC+'"';   // nom de police avec espace → entre guillemets
+    const segR=measure(txtR,SIZER,SIZER+'px '+famQ);
+    const segZ=measure(txtZ,SIZEZ,SIZEZ+'px '+famQ);
     // positionne les lettres : Robin puis espace puis Zmuda
     let x=0;
     segR.letters.forEach(l=>{l.x=x;x+=l.wd+gapL;});
     x=x-gapL+gapW;
     segZ.letters.forEach(l=>{l.x=x;x+=l.wd+gapL;});
     const Wtotal=x-gapL;
-    // débordements d'encre globaux (ornements Zapfino à gauche/droite)
+    // débordements d'encre globaux (ornements calligraphiques à gauche/droite)
     const all=[...segR.letters,...segZ.letters];
     const minL=Math.min(0,...all.map(l=>l.bbL));
     const maxR=Math.max(...all.map(l=>l.x+l.wd+l.bbR));
@@ -124,13 +127,13 @@ async function initSig(){
     sigC.style.width=Math.round(W)+'px';sigC.style.height=Math.round(H)+'px';
     return ld2;
   }
-  /* Dégradé vertical du thème (haut clair → bas cramoisi), lu depuis les variables CSS.
-     Les MÊMES stops servent au tracé des lettres et au coloriage : même dégradé partout. */
-  function themeStops(){                 // → [[pos, couleur], …] identique pour tracé & coloriage
+  /* Dégradé vertical du thème (haut clair → bas cramoisi), lu depuis les variables CSS de la rampe.
+     Ces stops colorent le tracé au pinceau des lettres. */
+  function themeStops(){                 // → [[pos, couleur], …]
     const cs=getComputedStyle(document.documentElement);
     const v=n=>{const s=cs.getPropertyValue(n).trim();return s||null;};
-    const ice=v('--ice'),cyan=v('--cyan'),crimson=v('--crimson');
-    return [[0,'#f0f6ff'],[.15,'#f0f6ff'],[.45,ice||'#bcd6ea'],[.70,cyan||'#74bccb'],[1,crimson||'#b32247']];
+    const snow=v('--ramp-snow'),ice=v('--ice'),cyan=v('--cyan'),crimson=v('--crimson');
+    return [[0,snow||'#f0f6ff'],[.15,snow||'#f0f6ff'],[.45,ice||'#bcd6ea'],[.70,cyan||'#74bccb'],[1,crimson||'#b32247']];
   }
   function makeThemeGrad(ctx,stops){    // dégradé vertical 0→h sur un contexte donné
     const {h}=ld;
@@ -139,26 +142,53 @@ async function initSig(){
     return g;
   }
   function themeGrad(){ return makeThemeGrad(sigCtx,themeStops()); }
-  /* Écriture au pinceau en DEUX temps, « Robin » puis « Zmuda », dans la continuité :
-     phase trace — TOUTES les lettres sont écrites une à une (trait seul, AUCUN remplissage),
-     phase fill — le « crayon » remplit ensuite chaque lettre dans l'ordre du tracé
-     (fillText révélé de gauche à droite par un clip). Chaque lettre dure un temps fixe
-     (LETTRE_MS / FILL_MS), piloté par le temps (pas le framerate).
-     Phases : trace → fill → pause → erase. */
+  /* Écriture au pinceau CONTINUE, « Robin » puis « Zmuda », à la suite — AUCUN temps mort :
+     la durée de chaque lettre est proportionnelle à la longueur de trait réellement nécessaire
+     pour la révéler (mesurée hors-écran, même sémantique de dash que le rendu). Le pinceau
+     enchaîne donc les lettres sans pause ; seule une courte respiration sépare les deux mots.
+     Le tracé reste en trait fin (aucun remplissage) : on écrit → pause → effacement.
+     Piloté par le temps (pas le framerate). Phases : trace → pause → erase. */
   function writeLoop(){
     const {w,h,L,baseY,nR}=ld;
-    const LETTRE_MS=750;       // durée d'écriture (trait) d'une lettre — rythme lent, calligraphie
-    const GAP_MOT=600;         // respiration entre « Robin » et « Zmuda » (fin de mot)
-    const FILL_MS=620;         // durée de remplissage d'une lettre (crayon), après tout le tracé
-    const GAP_FILL=900;        // pause entre la fin du tracé complet et le début du remplissage
+    const GAP_MOT=250;         // respiration courte entre « Robin » et « Zmuda » (fin de mot)
+    const TRACE_TOTAL=3400;    // durée totale de l'écriture des deux mots (continue, hors respirations)
     const PAUSE=5800;
     const ERASE=560;
     let li=0,phase='trace',lastT=null,pauseAcc=0,eraseT0=0;
-    let trT0=-1;                 // chrono du tracé/remplissage de la lettre courante (-1 : à initialiser au 1er frame)
+    let trT0=-1;                 // chrono de la lettre courante (-1 : à initialiser au 1er frame)
     sigCtx.lineCap='round';sigCtx.lineJoin='round';
     sigCtx.strokeStyle=themeGrad();
-    /* Largeur du « pinceau » : assez longue pour couvrir la lettre + donner le tempo */
-    const brushOf=l=>Math.max(80,l.px*4.2);
+    /* Longueur de trait (dash) qui révèle ENTIÈREMENT chaque lettre — mesurée une fois sur un
+       canvas hors-écran : on peint la lettre avec un tiret croissant jusqu'à obtenir le même
+       encre que le trait plein (même police, même épaisseur, même sémantique dash). C'est ce
+       « besoin réel » qui pilote la durée de la lettre → plus de temps mort entre les lettres. */
+    const neededDash=l=>{
+      const px=l.px,span=Math.max(10,l.wd+(l.bbL<0?-l.bbL:0)+(l.bbR>0?l.bbR:0));
+      const cv=document.createElement('canvas');
+      cv.width=Math.ceil(span+px*0.8);cv.height=Math.ceil(px*2.6);
+      const c=cv.getContext('2d');
+      const gx=Math.ceil(px*0.4+(l.bbL<0?-l.bbL:0)),gy=Math.ceil(px*1.9);
+      const lw=Math.max(1.4,px*0.016);
+      const countAt=D=>{
+        c.clearRect(0,0,cv.width,cv.height);
+        c.font=l.font;c.textBaseline='alphabetic';c.textAlign='left';
+        c.strokeStyle='#000';c.lineWidth=lw;c.lineJoin='round';c.lineCap='round';
+        if(D>0)c.setLineDash([D,1e6]);else c.setLineDash([]);
+        c.strokeText(l.c,gx,gy);
+        const img=c.getImageData(0,0,cv.width,cv.height).data;
+        let n=0;for(let i=3;i<img.length;i+=4){if(img[i]>8)n++;}
+        return n;
+      };
+      const full=countAt(0);
+      if(full<=0)return Math.max(span,px*0.9);
+      let lo=0,hi=Math.max(span,px*1.2);
+      while(countAt(hi)<full&&hi<px*80)hi*=2;
+      for(let i=0;i<14;i++){const mid=(lo+hi)/2;if(countAt(mid)>=full)hi=mid;else lo=mid;}
+      return Math.max(12,hi+2);
+    };
+    const need=L.map(neededDash);                       // trait nécessaire par lettre
+    const needTot=need.reduce((a,b)=>a+b,0)||1;
+    const durT=L.map((l,i)=>Math.max(110,Math.round(need[i]/needTot*TRACE_TOTAL)));   // durée de tracé de chaque lettre
     function paint(l,alpha,dash){
       sigCtx.save();
       sigCtx.globalAlpha=alpha;
@@ -169,115 +199,17 @@ async function initSig(){
       sigCtx.strokeText(l.c,l.x,baseY);
       sigCtx.restore();
     }
-    /* Colorie une lettre au « crayon » (style coloriage, PAS un remplissage lisse).
-       Le tracé Zapfino est très fin : on ne « remplit » donc pas l'intérieur (il n'existe
-       presque pas) — on COLORIE PAR-DESSUS le trait comme au crayon sur un dessin au trait :
-       chaque lettre reçoit une silhouette légèrement épaissie (glyphe + contour 2-3 px, comme
-       un tracé à colorier), et on la remplit de hachures de crayon visibles : traits inclinés,
-       cassés, semi-transparents, d'appui variable, colorés par le dégradé du thème à leur
-       hauteur (mêmes couleurs que le tracé). Le trait fin d'origine reste visible dessous.
-       Deux tampons : A = silhouette épaissie opaque ; B = hachures ; B masqué par A
-       (destination-in) → le crayon reste sur la lettre. Progression k (0→1, gauche→droite)
-       par drawImage avec source-rect. */
-    const TH_STOPS=themeStops();          // MÊMES couleurs que le tracé (stops du dégradé)
-    function hexToRgb(h){const n=parseInt(h.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255];}
-    function lerpColor(a,b,f){
-      const pa=hexToRgb(a),pb=hexToRgb(b);
-      return `rgb(${Math.round(pa[0]+(pb[0]-pa[0])*f)},${Math.round(pa[1]+(pb[1]-pa[1])*f)},${Math.round(pa[2]+(pb[2]-pa[2])*f)})`;
-    }
-    function gradAt(t){                   // couleur du dégradé du thème en t∈[0,1] (vertical)
-      t=Math.max(0,Math.min(1,t));
-      for(let i=1;i<TH_STOPS.length;i++){
-        const p0=TH_STOPS[i-1][0],p1=TH_STOPS[i][0];
-        if(t<=p1)return lerpColor(TH_STOPS[i-1][1],TH_STOPS[i][1],(t-p0)/(p1-p0||1));
-      }
-      return TH_STOPS[TH_STOPS.length-1][1];
-    }
-    function rnd(x){                      // bruit déterministe [0,1[
-      const s=Math.sin(x)*43758.5453;return s-Math.floor(s);
-    }
-    const hatchCache=new Map();           // lettre → {cv, gx, gy} canvas colorié prêt
-    function letterFillCanvas(l){
-      const cached=hatchCache.get(l);
-      if(cached&&cached.x===l.x)return cached;      // cache valide tant que la lettre n'a pas bougé
-      const inkL=l.x+(l.bbL<0?l.bbL:0);
-      const inkW=(l.wd+(l.bbR>0?l.bbR:0))-(l.bbL<0?l.bbL:0);
-      const zoneY=baseY-l.px*1.05, zoneH=l.px*1.5;
-      const w=Math.max(4,Math.ceil(inkW+20)),h=Math.max(4,Math.ceil(zoneH+14));
-      // glyphe dans les tampons : x=l.x→(l.x-(inkL-3)) ; y=baseY→(baseY-(zoneY-4))
-      const gx=l.x-(inkL-3), gy=baseY-(zoneY-4), offY=zoneY-4;
-      const font=l.font;
-      const inflate=Math.max(2.2,l.px*0.030);       // épaisseur « à colorier » autour du trait
-      // A) silhouette épaissie opaque (glyphe plein + contour)
-      const A=document.createElement('canvas');A.width=w;A.height=h;
-      const ax=A.getContext('2d');
-      ax.font=font;ax.textBaseline='alphabetic';ax.textAlign='left';
-      ax.fillStyle='#fff';ax.fillText(l.c,gx,gy);
-      ax.lineJoin='round';ax.lineCap='round';
-      ax.strokeStyle='#fff';ax.lineWidth=inflate*2;ax.strokeText(l.c,gx,gy);
-      // B) hachures de crayon (fond transparent), colorées par le dégradé à leur hauteur
-      const B=document.createElement('canvas');B.width=w;B.height=h;
-      const bx=B.getContext('2d');
-      bx.lineCap='round';
-      const baseAng=-0.62+rnd(l.x*3.7)*0.3;        // angle propre à chaque lettre
-      const step=Math.max(2.6,l.px*0.040);         // pas des hachures
-      const lw=Math.max(1.4,l.px*0.017);           // épaisseur de trait de crayon (visible)
-      const span=Math.hypot(w,h)+step*2;
-      const cxm=w/2,cym=h/2;
-      for(let p=0;p<2;p++){                        // 2 couches croisées (grain de crayon)
-        const ang=p===0?baseAng:baseAng+Math.PI/2*0.9;
-        const ca=Math.cos(ang),sa=Math.sin(ang);
-        const stepP=step*(p===0?1:1.4);
-        for(let d=-span;d<span;d+=stepP){
-          let t=-span;
-          while(t<span){
-            const seg=Math.max(4,span*0.22+rnd((d*7.1+t*3.3)+l.x*91.7)*span*0.30);
-            const te=Math.min(t+seg,span);
-            const x1=cxm-d*sa+ca*t,  y1=cym+d*ca+sa*t;
-            const x2=cxm-d*sa+ca*te, y2=cym+d*ca+sa*te;
-            const ym=(y1+y2)/2;                     // hauteur du segment dans le tampon
-            bx.strokeStyle=gradAt((ym+offY)/ld.h);  // même couleur que le tracé à ce y
-            bx.globalAlpha=0.50+rnd(t*13.7+d*5.3+l.x)*0.35;  // appui variable (creux visibles)
-            bx.lineWidth=lw*(0.8+rnd(t*3.1+l.x)*1.0);
-            bx.beginPath();bx.moveTo(x1,y1);bx.lineTo(x2,y2);bx.stroke();
-            t=te+seg*(0.10+rnd(t*2.9+l.x)*0.26);    // micro-blancs entre segments
-          }
-        }
-      }
-      // Masque B par la silhouette A : le crayon reste sur la lettre épaissie
-      bx.globalCompositeOperation='destination-in';
-      bx.drawImage(A,0,0);
-      const entry={cv:B,gx:(inkL-3),gy:offY,x:l.x};
-      hatchCache.set(l,entry);
-      return entry;
-    }
-    function colorLetter(l,k){            // dessine le coloriage de la lettre, révélé k∈[0,1]
-      if(k<=0)return;
-      const e=letterFillCanvas(l);
-      if(!e)return;
-      const srcW=Math.max(1,Math.round(e.cv.width*Math.min(1,Math.max(0,k))));
-      sigCtx.drawImage(e.cv,0,0,srcW,e.cv.height, e.gx,e.gy,srcW,e.cv.height);
-    }
-    /* Rendu de l'état courant.
-       trace : lettres terminées en trait seul (non remplies) + lettre courante en cours de tracé.
-       fill  : TOUTES les lettres restent visibles (trait fin), les précédentes sont remplies
-               (coloriage crayon), la courante est en cours de coloriage, les suivantes restent
-               en trait seul. Le trait fin reste visible sous le coloriage. */
+    /* Rendu de l'état courant (tracé uniquement, sans remplissage).
+       Lettres terminées : trait seul. Lettre courante : trait en cours d'écriture.
+       Lettres suivantes : pas encore visibles. */
     function drawState(liCur,k){
       sigCtx.clearRect(0,0,w,h);
-      const filling=phase!=='trace';
       for(let i=0;i<L.length;i++){
         const l=L[i];
-        if(filling){
-          paint(l,1,null);                     // le trait fin reste visible sur toutes les lettres
-          if(i<liCur)colorLetter(l,1);
-          else if(i===liCur)colorLetter(l,k);
-        }else{
-          if(i<liCur){paint(l,1,null);}        // lettre déjà écrite : trait seul, pas encore coloriée
-          else if(i===liCur){
-            const B=brushOf(l);
-            paint(l,1,[Math.max(0,B*k),Math.max(2,B*(1-k)+22)]); // écriture du trait
-          }
+        if(i<liCur){paint(l,1,null);}        // lettre déjà écrite : trait seul
+        else if(i===liCur&&k>0){             // k<=0 : respiration entre les mots → la lettre n'a pas commencé
+          const B=need[i];                   // trait calibré sur la lettre : fini pile quand sa durée s'écoule
+          paint(l,1,[Math.max(0,B*k),Math.max(2,B*(1-k)+22)]); // écriture du trait
         }
       }
     }
@@ -288,25 +220,14 @@ async function initSig(){
       if(window.__ph)window.__ph(phase+':'+li);
       if(phase==='trace'){
         const cur=L[li];
-        if(trT0<0)trT0=now;              // 1er frame (ou reprise après effacement) : démarre le trait ici
-        const k=Math.min(1,(now-trT0)/LETTRE_MS);
+        if(trT0<0)trT0=now;              // 1er frame (ou reprise après effacement) : démarre la lettre ici
+        const k=Math.min(1,(now-trT0)/durT[li]);
         drawState(li,k);
         if(k>=1){
-          paint(cur,1,null);   // lettre finie : trait seul (rien n'est rempli pendant le tracé)
+          paint(cur,1,null);   // lettre finie : trait seul
           li++;
-          if(li>=L.length){li=0;trT0=now+GAP_FILL;phase='fill';} // TOUTES écrites → le crayon remplit (après une pause)
-          else trT0=now+(li===nR?GAP_MOT:0);
-        }
-      }
-      else if(phase==='fill'){
-        const cur=L[li];
-        if(trT0<0)trT0=now;              // 1er frame de la passe remplissage
-        const k=Math.min(1,(now-trT0)/FILL_MS);
-        drawState(li,k);
-        if(k>=1){
-          li++;   // la lettre courante a déjà été coloriée par drawState(k=1)
-          if(li>=L.length){li=0;phase='pause';pauseAcc=0;lastT=null;}
-          else trT0=now+(li===nR?GAP_MOT:0);      // respiration entre les mots, comme au tracé
+          if(li>=L.length){li=0;phase='pause';pauseAcc=0;lastT=null;} // TOUTES écrites → pause puis effacement
+          else trT0=now+(li===nR?GAP_MOT:0);   // la lettre suivante démarre IMMÉDIATEMENT (pas de temps mort)
         }
       }
       else if(phase==='pause'){
@@ -317,7 +238,7 @@ async function initSig(){
         const k=1-Math.min(1,(now-eraseT0)/ERASE);
         sigCtx.clearRect(0,0,w,h);
         sigCtx.globalAlpha=k;
-        L.forEach(l=>{paint(l,1,null);colorLetter(l,1);});
+        L.forEach(l=>{paint(l,1,null);});
         sigCtx.globalAlpha=1;
         if(k<=0){li=0;trT0=-1;phase='trace';}
       }

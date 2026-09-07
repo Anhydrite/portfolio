@@ -25,7 +25,8 @@ Ce fichier décrit les **guidelines de travail** que tout agent doit suivre pour
 - Vérifier que la correction résout réellement le symptôme, pas seulement en théorie.
 
 ### 2.3 Validation visuelle systématique
-- Le modèle de l'agent ne lit pas les images : utiliser l'outil **image analysis (MiniMax)** sur les screenshots pour valider le rendu.
+- **Aucun visual agent** (sous-agent dédié à la lecture de screenshots/images) **sauf demande explicite de l'utilisateur** : ne jamais déléguer la validation visuelle à un visual agent par défaut.
+- Le modèle de l'agent ne lit pas les images : utiliser l'outil **image analysis (MiniMax)** sur les screenshots pour valider le rendu (toujours autorisé, ce n'est pas un visual agent).
 - Vérifier par mesure quantitative quand possible (positions/champs via le hook de debug `window.__lava`).
 
 ### 2.4 Ne pas sur-ajuster
