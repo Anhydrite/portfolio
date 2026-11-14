@@ -209,7 +209,10 @@ Conclusions :
 ### 4.2 Cartes projets : liste dynamique (API GitHub) + démo locale
 
 - La grille `.proj-grid` est remplie par `renderProjects(list)` ; le contenu vient de **l'API GitHub** (`GET /users/Anhydrite/repos?per_page=100&sort=pushed`, dépôts publics, `fork` exclus).
-- **Ordre** : étoiles décroissantes, puis `pushed_at` décroissant à étoiles égales. C'est ce second critère qui « remplit » la grille quand les dépôts étoilés sont moins nombreux que `PROJ_COUNT` (12). Conséquence assumée : les dépôts à 0 étoile poussés récemment passent devant d'anciens projets à 0 étoile, donc les 4 démos locales ne sont plus forcément visibles.
+- **Ordre** (3 critères, dans l'ordre) :
+  1. **dépôts à démo locale d'abord** (`repos[].demo`), entre eux selon l'ordre du tableau `repos` : ce sont les seuls projets réellement démontrables, et sans cette priorité leurs 0 étoile les faisaient sortir du top dès que des dépôts récents à 1 étoile existaient (constaté : plus aucun bouton « Démo live » sur la page). La liste de priorité est **dérivée** de `repos`, pas maintenue en double : ajouter une démo à un dépôt suffit à le faire remonter ;
+  2. puis **étoiles décroissantes** ;
+  3. puis **`pushed_at` décroissant** à étoiles égales, ce qui « remplit » la grille quand les dépôts étoilés sont moins nombreux que `PROJ_COUNT` (12).
 - **Repli** : le tableau `repos` (liste curatée, descriptions françaises, vignettes locales, liens de démo) est affiché **immédiatement** puis reste en place si l'API échoue (quota anonyme 60 req/h par IP, réseau coupé, ouverture en `file://`). Une réponse vide ne remplace jamais une liste déjà affichée.
 - **Cache** : réponse normalisée stockée 6 h dans `localStorage` (`rz-gh-repos-v1`) → une requête par demi-journée et par visiteur ; vérifié : deux `loadProjects()` consécutifs avec cache = **0 appel réseau**.
 - **Fusion des métadonnées** : `curated[]` (indexé par nom de dépôt, insensible à la casse) fournit la description française, la capture locale et le lien de démo ; les dépôts inconnus prennent la description GitHub (`Dépôt public, sans description.` si vide) et une **vignette générée** en SVG local (`phImg`), teintée par le langage ou, à défaut, par un hachage du nom.

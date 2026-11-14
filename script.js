@@ -413,9 +413,24 @@ function renderProjects(list){
   observeReveals();
 }
 
+/* Priorité : les dépôts qui ont une DÉMO LOCALE (donc un vrai projet à montrer, cf. repos[].demo)
+   passent devant ; ensuite étoiles décroissantes, puis le plus récemment poussé. Sans ce
+   classement, les démos (0 étoile, poussées il y a longtemps) sortiraient du top par le simple
+   jeu des étoiles et de la récence. La liste de priorité est DÉRIVÉE de `repos` : ajouter une
+   démo à un dépôt suffit à le faire remonter, rien à maintenir en double. */
+const isPinned=r=>!!(curated[String(r.name||'').toLowerCase()]||{}).demo;
+const curatedOrder={};
+repos.forEach((r,i)=>{curatedOrder[r.name.toLowerCase()]=i;});
 function sortProjects(list){
   return list.slice()
-    .sort((a,b)=>b.stars-a.stars||String(b.pushed||'').localeCompare(String(a.pushed||'')))
+    .sort((a,b)=>{
+      const pa=isPinned(a), pb=isPinned(b);
+      if(pa!==pb)return pb?1:-1;                                  // démos d'abord
+      if(pa&&pb){                                                 // entre démos : l'ordre du tableau `repos`
+        return (curatedOrder[a.name.toLowerCase()]??99)-(curatedOrder[b.name.toLowerCase()]??99);
+      }
+      return b.stars-a.stars||String(b.pushed||'').localeCompare(String(a.pushed||''));
+    })
     .slice(0,PROJ_COUNT);
 }
 
@@ -466,7 +481,7 @@ observeReveals();
 /* Grille projets : rendu immédiat (liste curatée) puis rafraîchissement réseau. Ces appels sont
    APRÈS la création de l'observer de reveal : les cartes reconstruites sont ré-observées par
    observeReveals(), sinon elles resteraient invisibles (opacity:0). */
-renderProjects(repos);
+renderProjects(sortProjects(repos));
 loadProjects();
 
 /* ---- TextScramble (titres) ---- */
