@@ -15,14 +15,21 @@ let svg;
 let selectedStation = "--";
 let data = [];
 let hour = "none"
-d3.json('data/departments.json', function (error, geoJson) {
-	init(geoJson)
-	d3.json('data/meteo.json', (stations) => {
-		dataWeather = stations;
-		initSelect();
-		initSelectStation();
-		draw();
-		initTooltip();
-	})
+/* Les scripts sont chargés dans <head> : quand les données arrivent (d3.json est asynchrone),
+   le <body> peut ne pas encore être analysé — le conteneur .navigation n'existait alors pas et
+   l'interface plantait (TypeError: appendChild of undefined). On démarre donc APRÈS le DOM. */
+function startDashboard() {
+	d3.json('data/departments.json', function (error, geoJson) {
+		init(geoJson)
+		d3.json('data/meteo.json', (stations) => {
+			dataWeather = stations;
+			initSelect();
+			initSelectStation();
+			draw();
+			initTooltip();
+		})
 
-});
+	});
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startDashboard);
+else startDashboard();

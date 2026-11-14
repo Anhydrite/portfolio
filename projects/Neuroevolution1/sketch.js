@@ -30,6 +30,3 @@ function setup() {
 	Boule = new boule(x, y, ballRadius);
 }
 
-
-
-jean.manger()

@@ -1,12 +1,12 @@
 /* ============================================================
-   Portfolio Robin ZMUDA — refonte glacier + cramoisi
+   Portfolio Robin ZMUDA - refonte glacier + cramoisi
    ============================================================ */
 
 const REDUCED_MOTION=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---- Marque de compétences (générée en JS : deux moitiés strictement identiques) ---- */
 (function(){
-  const words=['cybersécurité','pentest','rootme','cyberrange','neuroévolution','python','nodejs','eCPPTv2','crto','web','réseau','dataviz','gamedev','unity','typescript','c#','go','scraping','algorithmique','infra'];
+  const words=['cybersécurité','pentest','rootme','cyberrange','neuroévolution','python','nodejs','eCPPTv2','web','réseau','dataviz','gamedev','unity','typescript','c#','go','scraping','algorithmique','infra'];
   const track=document.getElementById('mqTrack');
   if(!track)return;
   const sep='&nbsp;&nbsp;●&nbsp;&nbsp;';
@@ -22,7 +22,12 @@ const railDot=rail?.querySelector('.scroll-rail-dot');
 const railLabel=rail?.querySelector('.scroll-rail-label');
 const prog=document.getElementById('prog');
 const sectionLabels={hero:'01 · ACCUEIL',about:'02 · À PROPOS',skills:'03 · COMPÉTENCES',projects:'04 · PROJETS',contact:'05 · CONTACT'};
-const sectionPositions=sections.map(section=>({section,top:section.offsetTop}));
+const SPY_TOL=0.12;                // une section devient active dès que son haut entre de SPY_TOL×hauteur
+                                   // de fenêtre : absorbe les arrondis de défilement et les micro-décalages
+                                   // de mise en page (polices, images) qui laissaient le surlignage sur la
+                                   // section précédente pour 2 px
+let pinnedUntil=0;                 // clic sur le dock : la section cliquée reste active le temps que le
+                                   // défilement fluide se stabilise (remis à zéro par un scroll manuel)
 let activeSection=null,scrollFrame=0;
 function activateSection(section){
   if(!section||section===activeSection)return;
@@ -33,31 +38,63 @@ function activateSection(section){
   if(railDot){railDot.style.top=`${index/(Math.max(1,sections.length-1))*123}px`;railDot.style.background=section.id==='projects'?'var(--crimson)':'var(--bcyan)';}
   if(railLabel)railLabel.textContent=sectionLabels[section.id]||section.id;
 }
+/* Section courante : celle qui occupe le BORD SUPÉRIEUR de la fenêtre.
+   Pourquoi pas une ligne repère à hauteur fixe (ex. 42 % de la fenêtre) ? Parce qu'une section
+   plus courte que cette ligne n'était JAMAIS détectée (sur un écran de 1080 px, « Compétences »
+   fait 439 px : cliquer sur Compétences surlignait Projets) et que la DERNIÈRE section ne pouvait
+   pas l'être non plus (la page ne défile plus assez pour amener son haut sous la ligne repère :
+   « Contact » n'était jamais surligné à 1920×1080). Le bord supérieur, lui, est atteint par
+   chaque section, et c'est le contenu qu'on est en train de lire.
+   Les positions sont relues à CHAQUE passage (getBoundingClientRect) : plus d'offsetTop mis en
+   cache, qui se périmait dès que la mise en page bougeait (images, polices, apparitions).
+   Aux deux extrémités du document, on force la première / dernière section. */
 function updateScrollState(){
   const max=document.documentElement.scrollHeight-window.innerHeight;
-  const progress=max>0?window.scrollY/max:0;
-  if(prog)prog.style.transform=`scaleX(${progress})`;
-  const marker=window.scrollY+window.innerHeight*.42;
-  let current=sectionPositions[0]?.section;
-  sectionPositions.forEach(({section,top})=>{if(marker>=top)current=section;});
+  const y=window.scrollY;
+  if(prog)prog.style.transform=`scaleX(${max>0?Math.max(0,Math.min(1,y/max)):0})`;
+  if(performance.now()<pinnedUntil)return;       // section épinglée par un clic : on ne l'écrase pas
+  let current=sections[0];
+  if(y>1){
+    if(max>0&&y>=max-1){
+      current=sections[sections.length-1];          // bas de page : la dernière section reste active
+    }else{
+      // dernière section dont le haut est entré dans la fenêtre (sections dans l'ordre du DOM)
+      const tol=window.innerHeight*SPY_TOL;
+      for(const section of sections){
+        if(section.getBoundingClientRect().top<=tol)current=section;else break;
+      }
+    }
+  }
   activateSection(current);
 }
 function scheduleScrollState(){
   if(scrollFrame)return;
   scrollFrame=requestAnimationFrame(()=>{scrollFrame=0;updateScrollState();});
 }
+/* Clic sur le dock : la section visée est activée immédiatement et « épinglée » le temps du
+   défilement fluide → le surlignage ne dépend jamais de la position d'arrivée au pixel près. */
+dockLinks.forEach(link=>{
+  link.addEventListener('click',()=>{
+    const target=sections.find(section=>'#'+section.id===link.getAttribute('href'));
+    if(!target)return;
+    activateSection(target);
+    pinnedUntil=performance.now()+1500;
+  });
+});
+/* Un défilement manuel rend la main au calcul par position (fin de l'épinglage). */
+['wheel','touchmove','keydown','mousedown'].forEach(type=>{
+  window.addEventListener(type,()=>{pinnedUntil=0;},{passive:true});
+});
 if(sections[0])activateSection(sections[0]);
 window.addEventListener('scroll',scheduleScrollState,{passive:true});
-window.addEventListener('resize',()=>{sectionPositions.forEach(item=>{item.top=item.section.offsetTop;});scheduleScrollState();},{passive:true});
-/* Recalcule après chargement des polices/ressources : les hauteurs bougent, la spy doit suivre. */
-(function(){
-  function remeasure(){sectionPositions.forEach(item=>{item.top=item.section.offsetTop;});scheduleScrollState();}
-  window.addEventListener('load',remeasure,{passive:true});
-  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(remeasure);
-})();
+window.addEventListener('resize',scheduleScrollState,{passive:true});
+/* Après chargement des polices/ressources la mise en page bouge sans événement de scroll :
+   on relance simplement une évaluation (aucune mesure n'est mise en cache). */
+window.addEventListener('load',scheduleScrollState,{passive:true});
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(scheduleScrollState);
 updateScrollState();
 
-/* ---- Signature « Robin Zmuda » (canvas calligraphique) — écriture au pinceau ----
+/* ---- Signature « Robin Zmuda » (canvas calligraphique) - écriture au pinceau ----
    Les DEUX mots sont écrits en Lavishly Yours avec un pinceau (setLineDash qui progresse),
    SANS temps mort entre les lettres : la durée de chaque lettre est proportionnelle à son tracé
    réel (mesuré), donc la pointe du pinceau ne s'arrête jamais. Le tracé reste en trait fin,
@@ -65,7 +102,7 @@ updateScrollState();
    responsives. */
 const sigC=document.getElementById('sig'),sigCtx=sigC.getContext('2d'),DPR=Math.min(devicePixelRatio||1,2);
 async function initSig(){
-  /* Police : Lavishly Yours (calligraphie, chargée localement) — les DEUX mots dans cette police */
+  /* Police : Lavishly Yours (calligraphie, chargée localement) - les DEUX mots dans cette police */
   let ok=false;
   try{const f=new FontFace('Lavishly Yours','url(./assets/font/LavishlyYours-Regular.ttf)');await f.load();document.fonts.add(f);ok=true;}catch(e){}
   const famC=ok?'Lavishly Yours':'cursive';
@@ -142,7 +179,7 @@ async function initSig(){
     return g;
   }
   function themeGrad(){ return makeThemeGrad(sigCtx,themeStops()); }
-  /* Écriture au pinceau CONTINUE, « Robin » puis « Zmuda », à la suite — AUCUN temps mort :
+  /* Écriture au pinceau CONTINUE, « Robin » puis « Zmuda », à la suite - AUCUN temps mort :
      la durée de chaque lettre est proportionnelle à la longueur de trait réellement nécessaire
      pour la révéler (mesurée hors-écran, même sémantique de dash que le rendu). Le pinceau
      enchaîne donc les lettres sans pause ; seule une courte respiration sépare les deux mots.
@@ -158,7 +195,7 @@ async function initSig(){
     let trT0=-1;                 // chrono de la lettre courante (-1 : à initialiser au 1er frame)
     sigCtx.lineCap='round';sigCtx.lineJoin='round';
     sigCtx.strokeStyle=themeGrad();
-    /* Longueur de trait (dash) qui révèle ENTIÈREMENT chaque lettre — mesurée une fois sur un
+    /* Longueur de trait (dash) qui révèle ENTIÈREMENT chaque lettre - mesurée une fois sur un
        canvas hors-écran : on peint la lettre avec un tiret croissant jusqu'à obtenir le même
        encre que le trait plein (même police, même épaisseur, même sémantique dash). C'est ce
        « besoin réel » qui pilote la durée de la lettre → plus de temps mort entre les lettres. */
@@ -281,7 +318,8 @@ const typeEl=document.getElementById('typeText');let p=0,ch=0,del=false;
 const tLines=[
   {p:'$ whoami',out:'Expert & développeur cybersécurité',cls:'v'},
   {p:'$ cat stack.txt',out:'Python · NodeJS · C · C# · JS',cls:'v'},
-  {p:'$ ./certifs --list',out:'eJPT · eCPPTv2 · CRTO (en cours)',cls:'cr'},
+  {p:'$ ./certifs --list',out:'eJPT · eCPPTv2',cls:'v'},
+  {p:'$ cat langues.txt',out:'français · anglais (TOEIC 885) · espagnol (A2)',cls:'v'},
   {p:'$ status',out:'OK · dispo pour de nouveaux projets',cls:'ok'}
 ];
 const tBody=document.getElementById('termBody');let tL=0,tC=0,tP='p';
@@ -298,23 +336,31 @@ if(REDUCED_MOTION)tBody.innerHTML=tLines.map(l=>`<span class="p">${l.p}</span>\n
 
 /* ---- Compétences (domaines + tags) ---- */
 const domains=[
-  {ico:'<svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><rect x="12.4" y="8.6" width="2" height="6.8" fill="currentColor" stroke="none"><animate attributeName="opacity" values="1;0;1" dur="1.1s" repeatCount="indefinite"/></rect></svg>',nm:'Langages',tags:['Python','C','C#','JavaScript','TypeScript','HTML5','CSS3','PHP','Shell']},
-  {ico:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="7s" repeatCount="indefinite"/></ellipse></svg>',nm:'Web',tags:['NodeJS','jQuery','Canvas 2D','d3.js']},
-  {ico:'<svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.5 8 11 4.6-1.5 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>',ac:'#d42a54',nm:'Sécurité',tags:['RootMe','eJPT','eCPPTv2','CRTO']},
-  {ico:'<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="19" r="2.2"/><circle cx="19" cy="19" r="2.2"/><path d="M12 7.2 6.6 17M12 7.2l5.4 9.8"/><circle cx="12" cy="5" r=".9" fill="currentColor" stroke="none"><animate attributeName="opacity" values="1;.2;1" dur="1.8s" repeatCount="indefinite"/></circle><circle cx="5" cy="19" r=".9" fill="currentColor" stroke="none"><animate attributeName="opacity" values=".2;1;.2" dur="1.8s" repeatCount="indefinite" begin=".6s"/></circle><circle cx="19" cy="19" r=".9" fill="currentColor" stroke="none"><animate attributeName="opacity" values=".2;1;.2" dur="1.8s" repeatCount="indefinite" begin="1.2s"/></circle></svg>',nm:'Réseau',tags:['Cyberrange','Infra entreprise','Paquets']},
-  {ico:'<svg viewBox="0 0 24 24"><path d="M7 6h10a5 5 0 0 1 5 5v4a4 4 0 0 1-7.3 2.3L13.5 16h-3l-1.2 1.3A4 4 0 0 1 2 15v-4a5 5 0 0 1 5-5z"/><path d="M6 12h4M8 10v4"/><circle cx="16" cy="11.5" r=".7" fill="currentColor" stroke="none"><animate attributeName="opacity" values="1;.15;1" dur="1.5s" repeatCount="indefinite"/></circle><circle cx="18.2" cy="13.8" r=".7" fill="currentColor" stroke="none"><animate attributeName="opacity" values=".15;1;.15" dur="1.5s" repeatCount="indefinite" begin=".75s"/></circle></svg>',nm:'Jeux',tags:['Unity','Allegro','Neuroévolution']}
+  {ico:'<svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><rect x="12.4" y="8.6" width="2" height="6.8" fill="currentColor" stroke="none"><animate attributeName="opacity" values="1;0;1" dur="1.1s" repeatCount="indefinite"/></rect></svg>',nm:'Langages',tags:['Python','C','C++','C#','JavaScript','TypeScript','PHP','HTML5','CSS3','Shell']},
+  {ico:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="7s" repeatCount="indefinite"/></ellipse></svg>',nm:'Web',tags:['NodeJS','Symfony','CakePHP','WordPress','PrestaShop','jQuery','Canvas 2D','d3.js']},
+  {ico:'<svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.5 8 11 4.6-1.5 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>',ac:'#d42a54',nm:'Sécurité',tags:['eJPT','eCPPTv2','RootMe','Burp Suite','sqlmap','Metasploit','Sliver','NetExec','Nmap','Wireshark','Scapy']},
+  {ico:'<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="19" r="2.2"/><circle cx="19" cy="19" r="2.2"/><path d="M12 7.2 6.6 17M12 7.2l5.4 9.8"/><circle cx="12" cy="5" r=".9" fill="currentColor" stroke="none"><animate attributeName="opacity" values="1;.2;1" dur="1.5s" repeatCount="indefinite"/></circle><circle cx="5" cy="19" r=".9" fill="currentColor" stroke="none"><animate attributeName="opacity" values=".2;1;.2" dur="1.5s" repeatCount="indefinite" begin=".75s"/></circle><circle cx="19" cy="19" r=".9" fill="currentColor" stroke="none"><animate attributeName="opacity" values=".2;1;.2" dur="1.5s" repeatCount="indefinite" begin="1.2s"/></circle></svg>',nm:'Réseau',tags:['Cisco','Open vSwitch','FRRouting','OSPF','BGP','VLAN','NAC','MPLS','Proxmox','ESXi','OpenNebula','Bastion','Cyberrange']},
+  {ico:'<svg viewBox="0 0 24 24"><path d="M7 6h10a5 5 0 0 1 5 5v4a4 4 0 0 1-7.3 2.3L13.5 16h-3l-1.2 1.3A4 4 0 0 1 2 15v-4a5 5 0 0 1 5-5z"/><path d="M6 12h4M8 10v4"/><circle cx="16" cy="11.5" r=".7" fill="currentColor" stroke="none"><animate attributeName="opacity" values="1;.15;1" dur="1.5s" repeatCount="indefinite"/></circle><circle cx="18.2" cy="13.8" r=".7" fill="currentColor" stroke="none"><animate attributeName="opacity" values=".15;1;.15" dur="1.5s" repeatCount="indefinite" begin=".75s"/></circle></svg>',nm:'Jeux',tags:['Unity','Allegro','Neuroévolution']},
+  // Setup de travail « vibecoding » : les technos et les outils réellement utilisés - pi (agent de
+  // code en terminal) et opencode (avec DeepSeek comme modèle), des serveurs MCP, des skills que
+  // j'écris et publie (doc-torn-skills), mes extensions pi et mes propres outils CLI (doc-torn-scan,
+  // rtk), le tout piloté par des sous-agents.
+  {ico:'<svg viewBox="0 0 24 24"><rect x="2.5" y="6.5" width="19" height="14" rx="2.5"/><path d="M6.8 11.2 9.4 13.8 6.8 16.4"/><path d="M12.2 16.4h5.8"/><path d="M18.6 1.6l.55 1.5 1.5.55-1.5.55-.55 1.5-.55-1.5-1.5-.55 1.5-.55z" fill="currentColor" stroke="none"><animate attributeName="opacity" values="1;.2;1" dur="2.6s" repeatCount="indefinite"/></path></svg>',ac:'var(--violet)',nm:'Vibecoding',tags:['pi','opencode','DeepSeek','MCP','skills maison','extensions pi','doc-torn-scan','rtk','sub-agents']}
 ];
 document.getElementById('skillsGrid').innerHTML=domains.map(d=>`<div class="sk box r"${d.ac?` style="--ac:${d.ac}"`:''}><i class="bracket t"></i><i class="bracket b"></i><span class="ico fi">${d.ico}</span><span class="nm"${d.ac?` style="color:${d.ac}"`:''}>${d.nm}</span><div class="tags">${d.tags.map(t=>`<span>${t}</span>`).join('')}</div></div>`).join('');
 
 /* ---- Projets (repos GitHub) ---- */
 const repos=[
-  {name:'Spiderer',lang:'Python',desc:'Website url crawler — given an URL, return all urls found on the website.',stars:7,img:null,url:'https://github.com/Anhydrite/Spiderer'},
-  {name:'doc-torn-skills',lang:'Go',desc:'Skills de documentation structurée pour agents de coding IA.',stars:4,img:null,url:'https://github.com/Anhydrite/doc-torn-skills'},
-  {name:'BotDiscord2',lang:'TypeScript',desc:'Bot Discord — stream de musique, nouvelles fonctionnalités en cours.',stars:1,img:null,url:'https://github.com/Anhydrite/BotDiscord2'},
-  {name:'Stegosaurus',lang:'JavaScript',desc:'Stegosaurus Neuroévolution — reprise du jeu de Google piloté par neuroévolution.',stars:0,img:'./assets/stegosaurus.png',url:'https://github.com/Anhydrite/Stegosaurus'},
-  {name:'Neuroevolution1',lang:'JavaScript',desc:'Monopong Neuroévolution — un pong pour un seul joueur piloté par neuroévolution.',stars:0,img:'./assets/pong.png',url:'https://github.com/Anhydrite/Neuroevolution1'},
-  {name:'OT-EQ',lang:'HTML',desc:'Orateur Typographique — retranscrire la tonalité de la voix à l\'écrit (Chrome uniquement).',stars:0,img:'./assets/orateur.png',url:'https://github.com/Anhydrite/OT-EQ'},
-  {name:'d3-weather-dataviz',lang:'JavaScript',desc:'Dashboard météo — visualisation de la météo de différentes stations.',stars:0,img:'./assets/dataviz.png',url:'https://github.com/Anhydrite/d3-weather-dataviz'},
+  {name:'Spiderer',lang:'Python',desc:'Website url crawler · given an URL, return all urls found on the website.',stars:7,img:null,url:'https://github.com/Anhydrite/Spiderer'},
+  {name:'Ordum',lang:'Python',desc:'Générateur d\'infrastructures : topologie réseau aléatoire type entreprise, déployable sur hyperviseur, avec un panel de vulnérabilités à venir (WIP).',stars:0,img:null,url:'https://github.com/Anhydrite/Ordum'},
+  {name:'doc-torn-skills',lang:'Go',desc:'Skills de documentation structurée pour agents de coding IA.',stars:6,img:null,url:'https://github.com/Anhydrite/doc-torn-skills'},
+  {name:'BotDiscord2',lang:'TypeScript',desc:'Bot Discord · stream de musique, nouvelles fonctionnalités en cours.',stars:1,img:null,url:'https://github.com/Anhydrite/BotDiscord2'},
+  {name:'pi-keep-model',lang:'TypeScript',desc:'Extension pi : garde le modèle actif d\'une session à l\'autre, en démarrage par défaut.',stars:1,img:null,url:'https://github.com/Anhydrite/pi-keep-model'},
+  {name:'a-star_with_ascii',lang:'Python',desc:'Algorithme A* sur une carte ASCII : murs, routes, brouillard, chemin le plus court, carte rafraîchie à chaque mouvement.',stars:0,img:null,url:'https://github.com/Anhydrite/a-star_with_ascii'},
+  {name:'Stegosaurus',lang:'JavaScript',desc:'Stegosaurus Neuroévolution · reprise du jeu de Google piloté par neuroévolution.',stars:0,img:'./assets/stegosaurus.png',url:'https://github.com/Anhydrite/Stegosaurus',demo:'./projects/Stegosaurus/index.html'},
+  {name:'Neuroevolution1',lang:'JavaScript',desc:'Monopong Neuroévolution · un pong pour un seul joueur piloté par neuroévolution.',stars:0,img:'./assets/pong.png',url:'https://github.com/Anhydrite/Neuroevolution1',demo:'./projects/Neuroevolution1/index.html'},
+  {name:'OT-EQ',lang:'HTML',desc:'Orateur Typographique · retranscrire la tonalité de la voix à l\'écrit (Chrome uniquement).',stars:0,img:'./assets/orateur.png',url:'https://github.com/Anhydrite/OT-EQ',demo:'./projects/OT-EQ/index.html'},
+  {name:'d3-weather-dataviz',lang:'JavaScript',desc:'Dashboard météo · visualisation de la météo de différentes stations.',stars:0,img:'./assets/dataviz.png',url:'https://github.com/Anhydrite/d3-weather-dataviz',demo:'./projects/dataviz/index.html'},
   {name:'SimpleXSSWebsite',lang:'HTML',desc:'Expérimentations XSS en conditions réelles.',stars:0,img:null,url:'https://github.com/Anhydrite/SimpleXSSWebsite'},
   {name:'GarticPhoneAutoDrawer',lang:'Python',desc:'Automatisation de dessin sur Gartic Phone.',stars:2,img:null,url:'https://github.com/Anhydrite/GarticPhoneAutoDrawer'}
 ];
@@ -325,7 +371,11 @@ function phImg(p){
   return 'data:image/svg+xml,'+encodeURIComponent(svg);
 }
 const projectGrid=document.getElementById('projGrid');
-projectGrid.innerHTML=repos.map((p,i)=>`<a class="pcard box r" href="${p.url}" target="_blank" rel="noopener" style="transition-delay:${(i%3)*.08}s"><i class="bracket t"></i><i class="bracket b"></i><span class="thumb"><img loading="lazy" decoding="async" src="${p.img||phImg(p)}" alt=""></span><div class="body"><div class="meta"><span class="ld" style="background:${lc[p.lang]||'var(--muted)'}"></span><span>${p.lang}</span>${p.stars>0?`<span class="star">★ ${p.stars}</span>`:''}</div><h3>${p.name}</h3><p class="desc">${p.desc}</p><div class="go">Voir sur GitHub <span class="arr">→</span></div></div></a>`).join('');
+/* Cartes projets : la carte n'est plus un <a> englobant (impossible d'y imbriquer le lien de
+   démo) - la vignette et le titre portent un lien « étiré » vers le dépôt GitHub (toute la
+   carte reste cliquable), et la ligne d'actions repasse au-dessus pour proposer la démo locale
+   (./projects/<nom>/, cf. repos[].demo) quand elle existe. */
+projectGrid.innerHTML=repos.map((p,i)=>`<article class="pcard box r" style="transition-delay:${(i%3)*.08}s"><i class="bracket t"></i><i class="bracket b"></i><span class="thumb"><img loading="lazy" decoding="async" src="${p.img||phImg(p)}" alt=""></span><div class="body"><div class="meta"><span class="ld" style="background:${lc[p.lang]||'var(--muted)'}"></span><span>${p.lang}</span>${p.stars>0?`<span class="star">★ ${p.stars}</span>`:''}</div><h3><a class="stretch" href="${p.url}" target="_blank" rel="noopener">${p.name}</a></h3><p class="desc">${p.desc}</p><div class="go"><a class="go-repo" href="${p.url}" target="_blank" rel="noopener">Voir sur GitHub <span class="arr">→</span></a>${p.demo?`<a class="go-demo" href="${p.demo}" target="_blank" rel="noopener">▶ Démo live <span class="arr">→</span></a>`:''}</div></div></article>`).join('');
 projectGrid.querySelectorAll('img').forEach(img=>{if(img.decode)img.decode().catch(()=>{});});
 
 /* ---- Réseaux ---- */
@@ -345,7 +395,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
 
 /* ---- TextScramble (titres) ---- */
 (function(){
-  const chars='!<>-_\\/[]{}—=+*^?#________';
+  const chars='!<>-_\\/[]{}=+*^?#________';
   const els=[...document.querySelectorAll('.sc')];
   const st=els.map(el=>({el,txt:el.textContent,running:false,frame:0,raf:0,timer:0,qchars:chars.split(''),queue:[]}));
   function setText(s){
@@ -374,53 +424,54 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const host=document.getElementById('lava-bg'),canvas=document.getElementById('lava-canvas');
   if(!host||!canvas)return;
   const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
-  const gl=canvas.getContext('webgl2',{alpha:false,antialias:true,depth:false,stencil:false,powerPreference:'high-performance'});
+  const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,stencil:false,powerPreference:'high-performance'});
   if(!gl){host.classList.add('is-fallback');return;}
 
-  let reduced=motion.matches,raf=0,last=0,W=0,H=0,DPR=1,scrolling=false,scrollTimer=0,accumulator=0;
+  // Pas de DPR ici : le fond est rendu à RENDER_SCALE × taille CSS (voir resize()). Le `DPR`
+  // global du fichier ne concerne que le canvas de la signature.
+  let reduced=motion.matches,raf=0,last=0,W=0,H=0,scrolling=false,scrollTimer=0,accumulator=0;
   const fpsValue=document.querySelector('#fps-counter strong');
   let fpsFrames=0,fpsStamp=performance.now();
   const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
 
   // ---------- Paramètres physiques (tunables) ----------
-  const MAX=680, N=620;            // capacité max + nb de particules : surface encore PLUS dense
+  const N=620;                     // nb de particules : surface encore PLUS dense
                                     // → rendu ultra-lisse, détail fin maximal
   const RENDER_MAX=680;            // particules rendues (toutes → surface lisse)
   const H_SMOOTH=0.042;            // rayon d'interaction SPH (unités = hauteur d'écran)
   const REST_DENSITY=1.6;          // densité de repos
   const K_PRESSURE=0.18;           // raideur de pression
-  const K_NEAR=0.024;              // raideur de pression proche (tension de surface) — arrondit les gouttes détachées
-  const VISCOSITY=0.15;            // viscosité (XSPH) — laminaire mais pas étouffante
-  const COHESION=0.045;            // cohésion (tension de surface) — blobs ronds, convection préservée
+  const K_NEAR=0.024;              // raideur de pression proche (tension de surface) - arrondit les gouttes détachées
+  const VISCOSITY=0.15;            // viscosité (XSPH) - laminaire mais pas étouffante
+  const COHESION=0.045;            // cohésion (tension de surface) - blobs ronds, convection préservée
   const COH_RANGE=1.30;            // portée de la cohésion (× H_SMOOTH)
-  const GRAVITY=0.34;              // gravité (unités/s²) — réduite : la base chaude (temp≈1.0) peut vaincre
+  const GRAVITY=0.34;              // gravité (unités/s²) - réduite : la base chaude (temp≈1.0) peut vaincre
                                     // la gravité et monter (poussée ~0.6 > 0.34) ; le dessus froid (0.3-0.5)
                                     // reste plus lourd que sa poussée → redescend (matière au sol)
-  const BUOYANCY=0.92;             // poussée d'Archimède (unités/s² par écart de température) — forte :
+  const BUOYANCY=0.92;             // poussée d'Archimède (unités/s² par écart de température) - forte :
                                     // la base chaude (≈1.0) monte franchement, le dessus froid redescend
   const HEAT_RATE=0.75;            // taux de chauffe de la plaque → la base du pool devient franchement
                                     // chaude (≈0.9-1.0) et perce le seuil pour détacher des colonnes ;
                                     // le reste du pool reste tiède (0.5-0.6) → matière au sol
   const WARMUP=35;                 // durée de PRÉCHAUFFE au chargement (s) : la plaque monte de 0 → pleine puissance (courbe smoothstep)
-  const HEAT_ZONE=0.30;            // (réservé) hauteur plafond de la zone de chauffe
-  const HEAT_THICK=0.09;           // épaisseur de la plaque chauffante — couche basse épaissie :
+  const HEAT_THICK=0.09;           // épaisseur de la plaque chauffante - couche basse épaissie :
                                     // plus de matière est chauffée au sol → plus de colonnes se détachent
                                     // (moins de matière qui reste figée au fond)
   const BURNERS=4;                 // nombre de SPOTS DE CHAUFFE (brûleurs discrets) espacés sur la largeur :
                                     // des colonnes naissent à des points précis, le reste du pool reste froid
-                                    // et ancré (matière au sol) — mécanisme Rayleigh-Taylor localisé
+                                    // et ancré (matière au sol) - mécanisme Rayleigh-Taylor localisé
   const COOL_RATE=0.008;           // refroidissement ambiant FAIBLE (proportionnel à T) : le pool reste un
                                     // réservoir tiède stable ; la base accumule la chaleur et perce le seuil
                                     // pour détacher des colonnes (la convection, pas le refroidissement, ferme le cycle)
   const COOL_TOP=0.18;             // refroidissement en l'air RÉDUIT (relaxation) : le liquide qui monte
                                     // reste chaud et léger plus longtemps (colonnes longues, gouttes qui
                                     // flottent avant de retomber) ; il redescend plus lentement
-  const COOL_TOP_Z=0.55;           // seuil de hauteur RELEVÉ : le refroidissement n'agit qu'à partir de 0.55 —
+  const COOL_TOP_Z=0.55;           // seuil de hauteur RELEVÉ : le refroidissement n'agit qu'à partir de 0.55 - 
                                     // la matière monte très haut encore chaude, ne refroidit que là-haut
-  const CEIL_RECALL=0.20;          // force de rappel vers le bas au-dessus de CEIL_Z (ferme le cycle) — douce
-  const CEIL_Z=0.85;               // altitude au-delà de laquelle le liquide est rabattu — haute :
+  const CEIL_RECALL=0.20;          // force de rappel vers le bas au-dessus de CEIL_Z (ferme le cycle) - douce
+  const CEIL_Z=0.85;               // altitude au-delà de laquelle le liquide est rabattu - haute :
                                     // la matière peut monter haut avant le rappel
-  const CONDUCT=0.06;               // conduction thermique — anisotrope (voir CONDUCT_VBIAS) :
+  const CONDUCT=0.06;               // conduction thermique - anisotrope (voir CONDUCT_VBIAS) :
                                     // verticale pour chauffer la colonne au-dessus des spots (elle devient
                                     // légère et monte), horizontale pour diffuser la chaleur dans le pool
   const CONDUCT_VBIAS=3.0;          // BIAIS VERTICAL de conduction (×3 sur l'axe vertical) : la chaleur
@@ -429,24 +480,30 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const T_CRITICAL=0.52;           // seuil critique : au-delà, le liquide s'allège et vole (détachement des colonnes)
   const THERMAL_NOTEFF=0.50;       // expansion : xREST_DENSITY effectif en dessous de ce seuil
   const THERMAL_BOOST=0.55;        // surchauffe locale → détachement serein de bulles (compense la dissipation)
-  const RESTITUTION=0.35;          // rebond (sol/murs) — suffisant pour des éclaboussures vivantes
+  const RESTITUTION=0.35;          // rebond (sol/murs) - suffisant pour des éclaboussures vivantes
   const DAMPING=0.992;             // amortissement global
   const GROUND_FRICTION=0.96;      // friction au sol
-  const MAX_FALL=0.16;             // vitesse terminale — un peu plus haute : les blobs montent/descendent
+  const MAX_FALL=0.16;             // vitesse terminale - un peu plus haute : les blobs montent/descendent
                                     // plus vite → plus de matière circule, moins de stagnation au sol
   const PART_RADIUS=0.026;         // rayon de rendu d'une particule (lisse)
+  const RENDER_SCALE=0.7;          // canvas = RENDER_SCALE × taille CSS (fond flouté 54px : le détail
+                                    // sous ~27 px CSS est détruit → rendre plus fin est du gaspillage)
+  const DENS_REF=960;              // hauteur de référence du champ de densité (calibrage du relief)
+  const DENS_H=480, DENS_W=768;    // champ de densité : aspect FIXE 1,6 (le monde est borné à
+                                    // [0.4;3.0] : le splat n'est isotrope qu'à 1,6 - c'était déjà
+                                    // le cas de l'ancienne texture 1536×960, même rapport 1,6)
+  const SPLAT_WORLD=0.128;         // diamètre d'un splat en fraction de la hauteur monde (calibré sur
+                                    // l'ancien réglage 123 px pour une texture de 960 px)
   // --- Graine de Rayleigh-Taylor : perturbation douce de l'interface (colonnes espacées) ---
-  const RT_SEED=0.008;             // amplitude de la graine (décalage latéral) — pool large & bas → colonnes régulières sur toute la largeur
+  const RT_SEED=0.008;             // amplitude de la graine (décalage latéral) - pool large & bas → colonnes régulières sur toute la largeur
   const RT_FREQ=22.0;              // fréquence spatiale → espacement des colonnes ≈ 2π/RT_FREQ
   // --- Traînée de Stokes : le blob compact glisse, le petit traîne (v ∝ r²) ---
   const DRAG_RATE=0.35;            // traînée de base (s⁻¹)
   const DRAG_AMB=1.5;              // surcroît de traînée quand peu de voisins (petits blobs → lents)
   const DRAG_NB=10;                // voisins de référence
   // --- Plateau-Rayleigh : pincement des brins verticaux fins en gouttes ---
-  const PR_LATERAL_MAX=3;          // un "brin" : peu de voisins latéraux
-  const PR_VERTICAL_MIN=2;         // mais assez de voisins au-dessus/en dessous
   // Fracture du cou (rupture du film) :
-  const PR_SNAP=0.05;              // ouverture latérale du cou après PBD (survit à la relaxation) — douce : les gouttes se détachent lentement, sans éclabousser
+  const PR_SNAP=0.05;              // ouverture latérale du cou après PBD (survit à la relaxation) - douce : les gouttes se détachent lentement, sans éclabousser
   const PR_BANDS=24;               // tranches horizontales pour détecter le cou
   const PR_MIN_OCC=4;              // particules min. par tranche candidate
   const PR_MAX_NECK=0.10;          // largeur max. du cou pour déclencher la fracture
@@ -516,12 +573,115 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const density=new Float32Array(N), nearDensity=new Float32Array(N);
   const pressure=new Float32Array(N);
   const dispX=new Float32Array(N), dispY=new Float32Array(N);
-  const nbC=new Float32Array(N), nbUp=new Float32Array(N), nbDn=new Float32Array(N);
+  const nbC=new Float32Array(N);
   const prLo=new Float32Array(32), prHi=new Float32Array(32), prCnt=new Uint16Array(32); // cou de colonne
+
+  /* ---------- Grille spatiale : voisinage en O(N) au lieu de O(N²) ----------
+     Le domaine monde [0,aspect]×[0,1] est l'image exacte du plein écran (le shader mappe
+     x/aspect et y sur [-1,1]) : un delta monde = une distance écran, la métrique est
+     isotrope. On le découpe donc en cellules CARRÉES de côté ≥ GRID_CELL (division entière :
+     aspect/gridW ≥ GRID_CELL par construction) : un voisinage 3×3 GARANTIT alors de couvrir
+     tout rayon ≤ GRID_CELL (pire cas : particule au coin de sa cellule), donc toutes les
+     interactions jusqu'à la portée de cohésion (H_SMOOTH×COH_RANGE).
+     Chaque pas : tri des particules par cellule (tri par comptage, O(N)) puis construction
+     d'une liste PLATE de paires uniques `(i, j, dx, dy, r²)` - chaque paire voisine est
+     enregistrée exactement une fois, quel que soit l'ordre des indices.
+     Les boucles lourdes (cohésion, densités, pression ×2, viscosité, conduction) itèrent
+     ensuite cette liste (~2 500 paires réelles) au lieu des 191 900 paires de l'ancien
+     double balayage → ~75× moins de tests de distance par pas. */
+  const COH_R=H_SMOOTH*COH_RANGE, COH_R2=COH_R*COH_R;
+  const GRID_CELL=COH_R;                    // côté de cellule = portée max d'interaction
+  let gridW=1,gridH=1,gridN=1;
+  let cellOf=new Int32Array(N),cellCount=new Int32Array(1),cellStart=new Int32Array(2),sortIdx=new Int32Array(N);
+  // Liste PLATE des paires uniques (i < j implicite) : les boucles lourdes itèrent cette liste
+  // et appliquent la mise à jour symétrique des deux particules, exactement comme l'ancienne
+  // boucle « for(j=i+1…N) » - sans tranche par particule ni double stockage.
+  let pairI=new Int32Array(N*24),pairJ=new Int32Array(N*24);
+  let pairDX=new Float32Array(N*24),pairDY=new Float32Array(N*24),pairR2=new Float32Array(N*24);
+  let nPairs=0;
+
+  /* Dimensionne la grille selon l'aspect courant (appelé à chaque redimensionnement).
+     Division ENTIÈRE (pas d'arrondi au supérieur) : la taille de cellule aspect/gridW reste
+     ≥ GRID_CELL, condition de la garantie de couverture du 3×3. */
+  function setupGrid(){
+    gridW=Math.max(1,Math.floor(aspect/GRID_CELL));
+    gridH=Math.max(1,Math.floor(1/GRID_CELL));
+    gridN=gridW*gridH;
+    if(cellCount.length!==gridN){cellCount=new Int32Array(gridN);cellStart=new Int32Array(gridN+1);}
+  }
+
+  /* Double la capacité des listes de paires (très rare : ~15 voisins réels par particule,
+     on réserve 24 emplacements par particule). */
+  function growPairs(){
+    const cap=pairJ.length*2;
+    const ni=new Int32Array(cap), nj=new Int32Array(cap);
+    const ndx=new Float32Array(cap), ndy=new Float32Array(cap), nr2=new Float32Array(cap);
+    ni.set(pairI); nj.set(pairJ); ndx.set(pairDX); ndy.set(pairDY); nr2.set(pairR2);
+    pairI=ni; pairJ=nj; pairDX=ndx; pairDY=ndy; pairR2=nr2;
+  }
+
+  /* Tri par cellule + liste de paires candidates par parcours des PAIRES DE CELLULES :
+     chaque paire de particules est testée UNE SEULE fois - paires internes à une cellule puis
+     demi-voisinage de Moore (E, S, SE, SO) - au lieu d'être retestée jusqu'à 9 fois par les
+     balayages 3×3 particule par particule. Même ensemble de paires, ~4× moins de tests. */
+  const CELL_DX=[1,0,1,-1], CELL_DY=[0,1,1,1];      // demi-voisinage : E, S, SE, SO
+  function buildNeighbors(){
+    const n=P.length;
+    cellCount.fill(0);
+    for(let i=0;i<n;i++){
+      const p=P[i];
+      let gx=(p.x/GRID_CELL)|0; if(gx<0)gx=0; else if(gx>=gridW)gx=gridW-1;
+      let gy=(p.y/GRID_CELL)|0; if(gy<0)gy=0; else if(gy>=gridH)gy=gridH-1;
+      const c=gy*gridW+gx; cellOf[i]=c; cellCount[c]++;
+    }
+    let s=0;
+    for(let c=0;c<gridN;c++){cellStart[c]=s; s+=cellCount[c];}
+    cellStart[gridN]=s;
+    for(let c=0;c<gridN;c++)cellCount[c]=cellStart[c];    // curseurs de remplissage
+    for(let i=0;i<n;i++)sortIdx[cellCount[cellOf[i]]++]=i;
+    let k=0;
+    for(let cy=0;cy<gridH;cy++){
+      for(let cx=0;cx<gridW;cx++){
+        const c=cy*gridW+cx, s0=cellStart[c], e0=cellStart[c+1];
+        if(s0===e0)continue;
+        // (1) paires INTERNES à la cellule
+        for(let t=s0;t<e0-1;t++){
+          const i=sortIdx[t], p=P[i], xi=p.x, yi=p.y;
+          for(let u=t+1;u<e0;u++){
+            const j=sortIdx[u], q=P[j];
+            const dx=q.x-xi, dy=q.y-yi, r2=dx*dx+dy*dy;
+            if(r2>=COH_R2||r2<1e-10)continue;
+            if(k===pairI.length)growPairs();
+            pairI[k]=i; pairJ[k]=j; pairDX[k]=dx; pairDY[k]=dy; pairR2[k]=r2;
+            k++;
+          }
+        }
+        // (2) paires avec la moitié positive des cellules voisines
+        for(let d=0;d<4;d++){
+          const nx=cx+CELL_DX[d], ny=cy+CELL_DY[d];
+          if(nx<0||nx>=gridW||ny<0||ny>=gridH)continue;
+          const c2=ny*gridW+nx, s2=cellStart[c2], e2=cellStart[c2+1];
+          if(s2===e2)continue;
+          for(let t=s0;t<e0;t++){
+            const i=sortIdx[t], p=P[i], xi=p.x, yi=p.y;
+            for(let u=s2;u<e2;u++){
+              const j=sortIdx[u], q=P[j];
+              const dx=q.x-xi, dy=q.y-yi, r2=dx*dx+dy*dy;
+              if(r2>=COH_R2||r2<1e-10)continue;
+              if(k===pairI.length)growPairs();
+              pairI[k]=i; pairJ[k]=j; pairDX[k]=dx; pairDY[k]=dy; pairR2[k]=r2;
+              k++;
+            }
+          }
+        }
+      }
+    }
+    nPairs=k;
+  }
 
   function step(h){
     const h2=H_SMOOTH*H_SMOOTH;
-    const cohR=H_SMOOTH*COH_RANGE, cohR2=cohR*cohR;
+    const invH=1/H_SMOOTH;
 
     // 1. Forces (gravité + poussée d'Archimède thermique + rappel plafond) + intégration
     for(let i=0;i<P.length;i++){
@@ -546,6 +706,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       p.x+=p.vx*h; p.y+=p.vy*h;
     }
     simTime+=h;
+    // Voisinage : listes de paires candidates reconstruites sur les positions courantes
+    // (après intégration) - même base topologique que l'ancienne passe O(N²).
+    buildNeighbors();
 
     // 1b. Détection du COU de colonne (Plateau-Rayleigh macroscopique) : la tranche la plus
     //     étroite au-dessus du pool, avec du matériau en dessous (pool) ET au-dessus (tête).
@@ -574,39 +737,25 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     else{neckY=-1;}
 
     // 2. Cohésion (tension de surface) : attire les particules proches
-    for(let i=0;i<P.length;i++){
-      for(let j=i+1;j<P.length;j++){
-        const a=P[i], b=P[j];
-        const dx=b.x-a.x, dy=b.y-a.y;
-        const r2=dx*dx+dy*dy;
-        if(r2>=cohR2 || r2<1e-10)continue;
-        const r=Math.sqrt(r2);
-        const w=1-r/cohR;
-        const f=COHESION*w*h;
-        const nx=dx/r, ny=dy/r;
-        a.vx+=f*nx; a.vy+=f*ny;
-        b.vx-=f*nx; b.vy-=f*ny;
-      }
+    for(let k=0;k<nPairs;k++){
+      const a=P[pairI[k]], b=P[pairJ[k]];
+      const r=Math.sqrt(pairR2[k]);
+      const f=COHESION*(1-r/COH_R)*h/r;
+      const fx=f*pairDX[k], fy=f*pairDY[k];
+      a.vx+=fx; a.vy+=fy;
+      b.vx-=fx; b.vy-=fy;
     }
 
-    // 3. Densités (noyau (1-q)^2 et (1-q)^3)
-    for(let i=0;i<P.length;i++){density[i]=0;nearDensity[i]=0;nbC[i]=0;nbUp[i]=0;nbDn[i]=0;}
-    for(let i=0;i<P.length;i++){
-      for(let j=i+1;j<P.length;j++){
-        const a=P[i], b=P[j];
-        const dx=b.x-a.x, dy=b.y-a.y;
-        const r2=dx*dx+dy*dy;
-        if(r2>=h2)continue;
-        const r=Math.sqrt(r2)||1e-6;
-        const q=r/H_SMOOTH;
-        const aq=1-q, aq2=aq*aq;
-        density[i]+=aq2; density[j]+=aq2;
-        const aq3=aq2*aq;
-        nearDensity[i]+=aq3; nearDensity[j]+=aq3;
-        nbC[i]++; nbC[j]++;
-        if(b.y>a.y){nbUp[i]++; nbDn[j]++;}
-        else{nbDn[i]++; nbUp[j]++;}
-      }
+    // 3. Densités (noyau (1-q)^2 et (1-q)^3) + comptage de voisinage (traînée de Stokes)
+    for(let i=0;i<P.length;i++){density[i]=0;nearDensity[i]=0;nbC[i]=0;}
+    for(let k=0;k<nPairs;k++){
+      const r2=pairR2[k];
+      if(r2>=h2)continue;                              // noyau nul au-delà du rayon d'interaction
+      const aq=1-Math.sqrt(r2)*invH, aq2=aq*aq, aq3=aq2*aq;
+      const i=pairI[k], j=pairJ[k];
+      density[i]+=aq2; density[j]+=aq2;
+      nearDensity[i]+=aq3; nearDensity[j]+=aq3;
+      nbC[i]++; nbC[j]++;
     }
 
     // 4. Pression : densité de repos effective dépend de la température (expansion thermique)
@@ -616,34 +765,36 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       pressure[i]=Math.max(0,K_PRESSURE*(density[i]-restEff));
     }
 
-    // 5. Déplacements de pression (double density relaxation) — 2 passes stables
+    // 5. Déplacements de pression (double density relaxation) - 2 passes stables.
+    //    Le voisinage est reconstruit après CHAQUE passe : la relaxation peut rapprocher deux
+    //    particules de bien plus que la marge de la liste (déplacements clampés à maxDisp, donc
+    //    jusqu'à ~0.045 de rapprochement relatif à deux), et l'ancienne boucle O(N²) retestait
+    //    TOUTES les paires à chaque étape - une liste figée en début de pas manquerait ces paires.
     const maxDisp=0.015;
     for(let pass=0;pass<2;pass++){
       for(let i=0;i<P.length;i++){dispX[i]=0;dispY[i]=0;}
-      for(let i=0;i<P.length;i++){
-        for(let j=i+1;j<P.length;j++){
-          const a=P[i], b=P[j];
-          const dx=b.x-a.x, dy=b.y-a.y;
-          const r2=dx*dx+dy*dy;
-          if(r2>=h2)continue;
-          const r=Math.sqrt(r2)||1e-6;
-          const q=r/H_SMOOTH, aq=1-q;
-          const nx=dx/r, ny=dy/r;
-          // Fracture Plateau-Rayleigh : si un cou de colonne est détecté, on coupe
-          // l'interaction (pression + tension) entre les particules de part et d'autre
-          // du plan du cou → le "film" casse, la colonne se sépare en deux.
-          if(neckY>=0){
-            const ay=a.y-neckY, by=b.y-neckY;
-            if(ay*by<0 && Math.abs(ay)<PR_FRAC_TOL+0.06 && Math.abs(by)<PR_FRAC_TOL+0.06)continue;
-          }
-          // j pousse i ; i pousse j
-          const near_i=aq*aq*K_NEAR*nearDensity[i];
-          const near_j=aq*aq*K_NEAR*nearDensity[j];
-          const Di=(pressure[j]+near_j)*aq*0.5;
-          const Dj=(pressure[i]+near_i)*aq*0.5;
-          dispX[i]-=Di*nx; dispY[i]-=Di*ny;
-          dispX[j]+=Dj*nx; dispY[j]+=Dj*ny;
+      for(let k=0;k<nPairs;k++){
+        const i=pairI[k], j=pairJ[k];
+        const a=P[i], b=P[j];
+        const dx=pairDX[k], dy=pairDY[k], r2=pairR2[k];
+        if(r2>=h2)continue;
+        const r=Math.sqrt(r2)||1e-6;
+        const aq=1-r*invH;
+        const inv=1/r, nx=dx*inv, ny=dy*inv;
+        // Fracture Plateau-Rayleigh : si un cou de colonne est détecté, on coupe
+        // l'interaction (pression + tension) entre les particules de part et d'autre
+        // du plan du cou → le "film" casse, la colonne se sépare en deux.
+        if(neckY>=0){
+          const ay=a.y-neckY, by=b.y-neckY;
+          if(ay*by<0 && Math.abs(ay)<PR_FRAC_TOL+0.06 && Math.abs(by)<PR_FRAC_TOL+0.06)continue;
         }
+        // j pousse i ; i pousse j
+        const near_i=aq*aq*K_NEAR*nearDensity[i];
+        const near_j=aq*aq*K_NEAR*nearDensity[j];
+        const Di=(pressure[j]+near_j)*aq*0.5;
+        const Dj=(pressure[i]+near_i)*aq*0.5;
+        dispX[i]-=Di*nx; dispY[i]-=Di*ny;
+        dispX[j]+=Dj*nx; dispY[j]+=Dj*ny;
       }
       for(let i=0;i<P.length;i++){
         let dx=dispX[i], dy=dispY[i];
@@ -652,6 +803,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
         if(m>limit){dx=dx/m*limit; dy=dy/m*limit;}
         P[i].x+=dx; P[i].y+=dy;
       }
+      // Les positions viennent de changer : le voisinage est reconstruit pour la passe suivante,
+      // pour la viscosité et pour la conduction qui suivent (positions stables jusqu'à la fin du pas).
+      buildNeighbors();
     }
 
     // 5b. RÉCONCILIATION PBD : vitesse = déplacement effectif depuis le début du pas.
@@ -681,22 +835,18 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       }
     }
 
-    // 6. Viscosité (XSPH) : lissage des vitesses entre voisins
-    for(let i=0;i<P.length;i++){
-      for(let j=i+1;j<P.length;j++){
-        const a=P[i], b=P[j];
-        const dx=b.x-a.x, dy=b.y-a.y;
-        const r2=dx*dx+dy*dy;
-        if(r2>=h2)continue;
-        const r=Math.sqrt(r2)||1e-6;
-        const q=r/H_SMOOTH;
-        const w=(1-q)*VISCOSITY*h;
-        a.vx+=w*(b.vx-a.vx); a.vy+=w*(b.vy-a.vy);
-        b.vx+=w*(a.vx-b.vx); b.vy+=w*(a.vy-b.vy);
-      }
+    // 6. Viscosité (XSPH) : lissage des vitesses entre voisins - listes de paires reconstruites
+    //    à la fin de la relaxation de pression (positions stables depuis), deltas toujours valides
+    for(let k=0;k<nPairs;k++){
+      const a=P[pairI[k]], b=P[pairJ[k]];
+      const r2=pairR2[k];
+      if(r2>=h2)continue;
+      const w=(1-Math.sqrt(r2)*invH)*VISCOSITY*h;
+      a.vx+=w*(b.vx-a.vx); a.vy+=w*(b.vy-a.vy);
+      b.vx+=w*(a.vx-b.vx); b.vy+=w*(a.vy-b.vy);
     }
 
-    // 7. Collisions (sol, murs, plafond) — absorbantes + friction au sol
+    // 7. Collisions (sol, murs, plafond) - absorbantes + friction au sol
     for(let i=0;i<P.length;i++){
       const p=P[i];
       if(p.x<p.r){p.x=p.r; if(p.vx<0)p.vx=-p.vx*RESTITUTION;}
@@ -738,17 +888,14 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     // Conduction ANISOTROPE : forte sur l'axe vertical (la colonne au-dessus des spots
     // chauffe et devient légère → monte), faible sur l'axe horizontal (le pool reste froid
     // et ancré). La chaleur monte par conduction dans les colonnes, pas latéralement.
-    for(let i=0;i<P.length;i++){
-      for(let j=i+1;j<P.length;j++){
-        const a=P[i], b=P[j];
-        const dx=b.x-a.x, dy=b.y-a.y;
-        const r2=dx*dx+dy*dy;
-        if(r2>=h2)continue;
-        const r=Math.sqrt(r2)||1e-6;
-        const vert=Math.abs(dy)/r;                    // 1 = voisin au-dessus/en-dessous, 0 = latéral
-        const transfer=CONDUCT*(1.0+(CONDUCT_VBIAS-1.0)*vert)*(b.temp-a.temp)*h;
-        a.temp+=transfer; b.temp-=transfer;
-      }
+    // La viscosité ne déplace pas les particules : les deltas mémorisés sont encore valides.
+    for(let k=0;k<nPairs;k++){
+      const a=P[pairI[k]], b=P[pairJ[k]];
+      const r2=pairR2[k];
+      if(r2>=h2)continue;
+      const vert=Math.abs(pairDY[k])/Math.sqrt(r2||1e-12);  // 1 = voisin au-dessus/en-dessous, 0 = latéral
+      const transfer=CONDUCT*(1.0+(CONDUCT_VBIAS-1.0)*vert)*(b.temp-a.temp)*h;
+      a.temp+=transfer; b.temp-=transfer;
     }
   }
 
@@ -781,8 +928,9 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       // y=0 (sol) → bas de la texture ; x ∈ [0,aspect] → [0,1]
       vec2 ndc=vec2(aPos.x/uAspect*2.0-1.0, aPos.y*2.0-1.0);
       gl_Position=vec4(ndc,0.0,1.0);
-      gl_PointSize=123.0;       // splat adapté à la texture 1536×960 : même couverture monde
-                                // → bords d'iso-surface très nets, détails fins visibles
+      gl_PointSize=${(SPLAT_WORLD*DENS_H).toFixed(2)};  // diamètre du splat en PIXELS de la texture de
+                                // densité : dérivé de SPLAT_WORLD×DENS_H → couverture monde invariante
+                                // par la résolution (l'ancien 123 px valait pour une texture de 960 px)
     }`;
   const splatFS=`#version 300 es
     precision highp float;
@@ -797,7 +945,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       outColor=vec4(w, w*vTemp, 0.0, 0.0);  // R=densité, G=densité×température (somme pondérée), A=0
                                               // (le canal A est réservé à la température MAX, passe suivante)
     }`;
-  // Passe température : splatte la TEMPÉRATURE MAX (blend MAX) dans le canal A — les points
+  // Passe température : splatte la TEMPÉRATURE MAX (blend MAX) dans le canal A - les points
   // chauds des colonnes restent visibles même sous un pool dense.
   const splatTempFS=`#version 300 es
     precision highp float;
@@ -828,15 +976,17 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       // Palette à la CHARTE GRAPHIQUE du site (glacier → cramoisi), ÉTALÉE et SATURÉE pour
       // que chaque variation de température soit clairement visible (pas de blanc précoce,
       // pas de zone grise) :
-      // bleu nuit → glacier → teal → pervenche → cramoisi → rose → blanc rosé (pic extrême)
+      // bleu nuit → glacier → teal → pervenche → cramoisi → rose → rose clair (pic)
+      // (pas de blanc : il était atteint par 13-35 % de la surface visible, cf. calibration ci-dessous)
       vec3 c0=vec3(0.03,0.07,0.16);   // bleu nuit profond (fond / cire froide)
       vec3 c1=vec3(0.22,0.42,0.62);   // glacier foncé
       vec3 c2=vec3(0.31,0.55,0.72);   // glacier    #4f8db8 (--blue)
       vec3 c3=vec3(0.45,0.74,0.80);   // teal       #74bccb (--cyan)
       vec3 c4=vec3(0.55,0.59,0.74);   // pervenche  #8d97bc (--purple)
-      vec3 c5=vec3(0.72,0.20,0.36);   // cramoisi   #b32247 (--crimson) — saturation renforcée
+      vec3 c5=vec3(0.72,0.20,0.36);   // cramoisi   #b32247 (--crimson) - saturation renforcée
       vec3 c6=vec3(0.88,0.40,0.58);   // rose       #d96d9a (--rose)
-      vec3 c7=vec3(1.00,0.86,0.88);   // blanc rosé lumineux (point le plus chaud, rare)
+      vec3 c7=vec3(0.94,0.62,0.71);   // rose clair (pic) - PAS de blanc : le blanc de la charte
+                                      // était atteint par 13-35 % de la surface visible (mesuré)
       // Segment cramoisi/rose élargi : le pool tiède (0.5-0.75) est déjà dans les rouges,
       // les colonnes chaudes (0.75-1.0) passent par rose → blanc rosé.
       if(t<0.12)return mix(c0,c1,t/0.12);
@@ -865,21 +1015,29 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
       // gouttes) → le max ressort (chaud visible même dilué par le splat).
       float blendHot=smoothstep(0.55, 0.18, dens); // 1 quand densité faible (colonnes)
       float t=mix(tAvg, tMax, blendHot);
+      // CALIBRATION de l'axe de température (mesurée sur le champ de densité réel, cf. AGENTS.md) :
+      // en régime établi la surface visible vit à p50 = 0.70 / p90 = 0.90, et pendant la
+      // préchauffe le pool atteint 1.0 sur de grandes surfaces. Recadrage léger (0.98x - 0.03)
+      // pour que ce maximum tombe dans le rose clair (et non sur le bord de la palette) :
+      // 0.70 -> cramoisi, 0.90 -> rose, 1.00 -> rose clair. Jamais de blanc.
+      t=clamp(t*0.98-0.03, 0.0, 1.0);
       // ISO-SURFACE : seuil de densité → forme pleine, bords adoucis
-      float iso=0.38;               // seuil de densité — ne garde que les zones denses
+      float iso=0.38;               // seuil de densité - ne garde que les zones denses
       float soft=0.10;              // adoucissement du bord resserré : contour précis
       float surf=smoothstep(iso, iso+soft, dens);
       vec3 col=tempToColor(t);
 
       // ===== LUMIÈRE 3D (effet liquide) : gradient de densité = normale de surface =====
       // On dérive la densité pour obtenir la normale → lumière d'en haut-gauche (relief).
-      // Échelle de dérivation = 2 texels (moins de samples, relief stable, coût réduit).
+      // Échelle de dérivation = 2 texels (moins de samples, relief stable, coût réduit). Le relief
+      // dépend du pas de dérivation EN UNITÉS MONDE (= 2/DENS_H) : on compense sur la 3e composante
+      // de la normale pour retrouver exactement l'ombrage calibré sur DENS_REF.
       vec2 texel=2.0/uDensSize;
       float dL=texture(uDens, uv+vec2(-texel.x,0.0)).r;
       float dR=texture(uDens, uv+vec2( texel.x,0.0)).r;
       float dD=texture(uDens, uv+vec2(0.0,-texel.y)).r;
       float dU=texture(uDens, uv+vec2(0.0, texel.y)).r;
-      vec3 nrm=normalize(vec3(dL-dR, dU-dD, 1.2));  // normale approchée
+      vec3 nrm=normalize(vec3(dL-dR, dU-dD, ${(1.2*DENS_REF/DENS_H).toFixed(3)}));  // normale approchée
       vec3 lightDir=normalize(vec3(0.45, 0.65, 0.6)); // lumière haut-gauche
       float diff=max(0.0, dot(nrm, lightDir));
       // Speculaire : reflet net sur les zones courbes (gouttes brillantes)
@@ -928,10 +1086,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   const splatTempLoc=gl.getAttribLocation(splat.p,'aTemp');
   const compPosLoc=gl.getAttribLocation(comp.p,'aPos');
 
-  // FBO + texture de densité (basse résolution, RGBA8 portable)
-  const DENS_W=1536, DENS_H=960;  // texture de densité ULTRA HAUTE résolution (1.5× vs 1024×640) :
-                                    // qualité maximale avec un coût GPU raisonnable (le rendu headless
-                                    // SwiftShader reste non représentatif ; sur GPU réel c'est fluide)
+  // FBO + texture de densité (RGBA8 portable ; dimensions déclarées avec les constantes de rendu)
   const densTex=gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D,densTex);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
@@ -970,7 +1125,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     gl.vertexAttribPointer(splatTempLoc,1,gl.FLOAT,false,12,8);
     gl.drawArrays(gl.POINTS,0,n);
 
-    // ---- Passe 1b : température MAX (blend MAX) — les points chauds restent visibles ----
+    // ---- Passe 1b : température MAX (blend MAX) - les points chauds restent visibles ----
     gl.blendEquation(gl.MAX);
     gl.blendFunc(gl.ONE,gl.ONE);
     gl.useProgram(splatTemp.p);
@@ -1002,24 +1157,31 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     gl.blendEquation(gl.FUNC_ADD);
   }
   function resize(){
-    W=Math.max(1,innerWidth);H=Math.max(1,innerHeight);
-    DPR=Math.min(devicePixelRatio||1,2.0);
+    // Dimensions de la BOÎTE CSS du canvas (fixed inset:0 → viewport hors barres de défilement),
+    // pas window.innerWidth/innerHeight qui incluent la barre de défilement classique : l'aspect
+    // du monde doit correspondre à la boîte réellement affichée.
+    W=Math.max(1,document.documentElement.clientWidth);
+    H=Math.max(1,document.documentElement.clientHeight);
     const newAspect=clamp(W/H,0.4,3.0);
     if(!P.length){aspect=newAspect;initParticles();}
     else{const k=newAspect/aspect;for(let i=0;i<P.length;i++){P[i].x*=k;P[i].px*=k;}aspect=newAspect;}
-    // Résolution du canvas : rendu PLEINE RÉSOLUTION (DPR complet, pas d'upscale CSS)
-    // → image nette ; la surface reste lisse grâce à l'iso-surface sur la texture fine.
-    const base=1.0;                  // qualité maximale : canvas = résolution écran × DPR
-    const quality=scrolling?Math.min(0.8,base):base;
-    canvas.width=Math.max(1,Math.round(W*DPR*quality));
-    canvas.height=Math.max(1,Math.round(H*DPR*quality));
+    setupGrid();
+    // Résolution du canvas : le fond est TOUJOURS flouté par `filter:blur(54px)` côté
+    // compositeur (voir style.css) : toute fréquence spatiale plus fine que ~27 px CSS est
+    // détruite avant l'écran. Rendre à RENDER_SCALE px CSS par pixel (sans tenir compte du
+    // DPR) divise par (DPR/RENDER_SCALE)² le nombre de fragments de la passe composite ET
+    // le coût du flou, sans différence visible (mesuré par diff d'images).
+    canvas.width=Math.max(1,Math.round(W*RENDER_SCALE));
+    canvas.height=Math.max(1,Math.round(H*RENDER_SCALE));
     gl.viewport(0,0,canvas.width,canvas.height);
     render();
   }
 
   function onScroll(){
-    if(!scrolling){scrolling=true;resize();document.documentElement.classList.add('is-scrolling');}
-    clearTimeout(scrollTimer);scrollTimer=setTimeout(()=>{scrolling=false;document.documentElement.classList.remove('is-scrolling');resize();},180);
+    // Plus aucune réallocation du canvas au scroll : changer canvas.width/height force le
+    // compositeur à recréer la surface GPU (à-coup) - le rendu reste à la même résolution.
+    if(!scrolling){scrolling=true;document.documentElement.classList.add('is-scrolling');}
+    clearTimeout(scrollTimer);scrollTimer=setTimeout(()=>{scrolling=false;document.documentElement.classList.remove('is-scrolling');},180);
   }
 
   function updateFps(now){
@@ -1047,18 +1209,28 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   function start(){if(!reduced&&!document.hidden&&!raf){last=0;accumulator=0;raf=requestAnimationFrame(frame);}}
   function updateMotion(){
     reduced=motion.matches;stop();
-    if(reduced){if(fpsValue)fpsValue.textContent='—';}
+    if(reduced){if(fpsValue)fpsValue.textContent='-';}
     else{fpsFrames=0;fpsStamp=performance.now();start();}
   }
 
-  // Hook de debug (test visuel / fast-forward)
-  window.__lava={step,render,P,neckY:()=>neckY,get aspect(){return aspect;},get N(){return N;},
+  // Hook de debug (test visuel / fast-forward / mesure) : piloter la sim, figer un état exact
+  // (snapshot/restore, y compris les comptages de voisinage) et mesurer le rendu.
+  const dbg={step,render,P,neckY:()=>neckY,get aspect(){return aspect;},get N(){return N;},
+    get simTime(){return simTime;},set simTime(v){simTime=v;},
+    get pairs(){return nPairs;},get canvasPx(){return [canvas.width,canvas.height];},
+    snapshot:()=>P.map((p,i)=>({x:p.x,y:p.y,vx:p.vx,vy:p.vy,px:p.px,py:p.py,temp:p.temp,nbC:nbC[i]})),
+    restore:s=>{for(let i=0;i<P.length;i++){const d=s[i],p=P[i];
+      p.x=d.x;p.y=d.y;p.vx=d.vx;p.vy=d.vy;p.px=d.px;p.py=d.py;p.temp=d.temp;
+      nbC[i]=d.nbC;}},
     // debug : expose la texture de densité pour mesurer la saturation
-    _densTex:densTex,_densW:DENS_W,_densH:DENS_H};
+    _densTex:densTex,_densW:DENS_W,_densH:DENS_H,
+    // debug : force la reconstruction du voisinage et expose la liste (validation vs force brute)
+    rebuild:buildNeighbors,pairList:()=>({i:pairI,j:pairJ,r2:pairR2,n:nPairs})};
+  window.__lava=dbg;
 
   try{
     gl.clearColor(0,0,0,1);resize();render();
-    if(reduced&&fpsValue)fpsValue.textContent='—';else start();
+    if(reduced&&fpsValue)fpsValue.textContent='-';else start();
     canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();stop();host.classList.add('is-fallback');},{passive:false});
     document.addEventListener('visibilitychange',()=>document.hidden?stop():start(),{passive:true});
     addEventListener('resize',resize,{passive:true});

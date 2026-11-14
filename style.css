@@ -1,5 +1,5 @@
 /* ============================================================
-   Portfolio Robin ZMUDA — refonte glacier + cramoisi
+   Portfolio Robin ZMUDA - refonte glacier + cramoisi
    ============================================================ */
 *,*::before,*::after{box-sizing:border-box}
 :where(img,svg,video,canvas,iframe){max-width:100%;height:auto}
@@ -7,20 +7,20 @@
 
 :root{
   /* ============================================================
-     CHARTE DE DÉGRADÉS — tout le site se reconfigure ici.
+     CHARTE DE DÉGRADÉS - tout le site se reconfigure ici.
      Change les DEUX PÔLES (froid → chaud) pour rethémer :
        --ramp-cold  = extrémité froide (glacier)
        --ramp-hot   = extrémité chaude (cramoisi)
      Les intermédiaires (--ramp-mid, --ramp-soft, …) restent
      ajustables individuellement si besoin.
      ============================================================ */
-  --ramp-cold:#4f8db8;      /* PÔLE FROID  — bleu glacier (base traits / frises) */
-  --ramp-mid:#3cb8d4;       /* intermédiaire — cyan vif (--bcyan) */
-  --ramp-soft:#74bccb;      /* intermédiaire — teal glacier (--cyan) */
-  --ramp-ice:#bcd6ea;       /* intermédiaire — glace claire (--ice), textes */
-  --ramp-snow:#f0f6ff;      /* intermédiaire — blanc glacier (départ dégradés texte) */
-  --ramp-flare:#e05555;     /* intermédiaire — rouge clair (--red), pic texte */
-  --ramp-hot:#b32247;       /* PÔLE CHAUD  — cramoisi (--crimson) */
+  --ramp-cold:#4f8db8;      /* PÔLE FROID - bleu glacier (base traits / frises) */
+  --ramp-mid:#3cb8d4;       /* intermédiaire - cyan vif (--bcyan) */
+  --ramp-soft:#74bccb;      /* intermédiaire - teal glacier (--cyan) */
+  --ramp-ice:#bcd6ea;       /* intermédiaire - glace claire (--ice), textes */
+  --ramp-snow:#f0f6ff;      /* intermédiaire - blanc glacier (départ dégradés texte) */
+  --ramp-flare:#e05555;     /* intermédiaire - rouge clair (--red), pic texte */
+  --ramp-hot:#b32247;       /* PÔLE CHAUD - cramoisi (--crimson) */
   /* Déclinaisons « vives » du graphe d'expérience (fond sombre) : DÉRIVÉES des pôles et
      intermédiaires pour que tout le site suive le rethème (plus de hex en dur). */
   --ramp-hot-bright:var(--ramp-hot);   /* présent (haut du graphe) = pôle chaud */
@@ -32,22 +32,22 @@
   --bg:#000000;            /* fond noir pur */
   --bg2:#05050a;
   --bg3:rgba(0,0,0,.6);
-  --txt:#e8effb;            /* texte principal — légèrement adouci */
-  --muted:#7d93b4;          /* texte secondaire — foncé pour rester lisible sur lave */
-  --blue:var(--ramp-cold); /* bleu glacier — alias du pôle froid */
+  --txt:#e8effb;            /* texte principal - légèrement adouci */
+  --muted:#7d93b4;          /* texte secondaire - foncé pour rester lisible sur lave */
+  --blue:var(--ramp-cold); /* bleu glacier - alias du pôle froid */
   --blue-2:#7aaccc;
   --blue-3:#355f8f;
   --sky:#9cc2e0;
-  --cyan:var(--ramp-soft); /* teal glacier — alias */
-  --purple:#8d97bc;        /* pervenche douce — foncée */
-  --ice:var(--ramp-ice);   /* glace claire — alias */
-  --rose:#d96d9a;          /* rose vif — foncé */
-  --amber:#e08f3d;         /* orange — foncé */
-  --mint:#52b368;          /* vert — foncé */
-  --red:var(--ramp-flare); /* rouge clair — alias */
-  --crimson:var(--ramp-hot);/* rouge cramoisi — alias du pôle chaud */
-  --violet:#967fe0;        /* violet — foncé */
-  --bcyan:var(--ramp-mid); /* cyan vif — alias */
+  --cyan:var(--ramp-soft); /* teal glacier - alias */
+  --purple:#8d97bc;        /* pervenche douce - foncée */
+  --ice:var(--ramp-ice);   /* glace claire - alias */
+  --rose:#d96d9a;          /* rose vif - foncé */
+  --amber:#e08f3d;         /* orange - foncé */
+  --mint:#52b368;          /* vert - foncé */
+  --red:var(--ramp-flare); /* rouge clair - alias */
+  --crimson:var(--ramp-hot);/* rouge cramoisi - alias du pôle chaud */
+  --violet:#967fe0;        /* violet - foncé */
+  --bcyan:var(--ramp-mid); /* cyan vif - alias */
   --line:rgba(140,205,218,.13);
   --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
   --sans:"Quicksand","Segoe UI",system-ui,sans-serif;
@@ -109,7 +109,7 @@ a{color:inherit;text-decoration:none}
 .hero-content,.hero-left,.hero h1{min-width:0;max-width:100%}
 /* Signature « Robin Zmuda » : tout est dessiné dans le canvas (les deux mots en Lavishly Yours)
    et écrit au pinceau lettre par lettre à la suite, sans temps mort entre les lettres.
-   La taille d'affichage est posée en JS (inline width/height) — ici juste max-width. */
+   La taille d'affichage est posée en JS (inline width/height) - ici juste max-width. */
 .hero h1 canvas{display:block;width:auto;height:auto;max-width:100%;margin-bottom:-3px}
 .hero-crumb{font-family:var(--mono);font-size:.8rem;color:var(--muted);letter-spacing:.1em;display:flex;align-items:center;gap:10px;margin-bottom:20px;}
 .hero-crumb .pulse{width:8px;height:8px;border-radius:50%;background:var(--cyan);animation:pulse 2s ease-in-out infinite}
@@ -141,7 +141,7 @@ a{color:inherit;text-decoration:none}
 .term-bar .r{background:#ff5f57}.term-bar .y{background:#febc2e}.term-bar .g{background:#28c840}
 .term-bar .ttl{font-family:var(--mono);font-size:.62rem;color:var(--muted);margin-left:8px;letter-spacing:.1em;text-transform:uppercase}
 .term-body{font-family:var(--mono);font-size:.78rem;line-height:1.75;padding:18px 20px;color:#cfe2f8;min-height:180px;white-space:pre-line}
-.term-body .p{color:var(--cyan)}.term-body .ok{color:#34d399}.term-body .v{color:var(--sky)}.term-body .cr{color:var(--crimson)}.term-body .cb{color:var(--cyan);animation:blink 1s steps(1) infinite}
+.term-body .p{color:var(--cyan)}.term-body .ok{color:#34d399}.term-body .v{color:var(--sky)}.term-body .cb{color:var(--cyan);animation:blink 1s steps(1) infinite}
 .scroll-hint{position:absolute;z-index:2;bottom:34px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:.7rem;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;display:flex;flex-direction:row;align-items:center;gap:8px;animation:floaty 2.5s ease-in-out infinite;white-space:nowrap}
 @keyframes floaty{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-8px)}}
 .scroll-hint .chev{width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);opacity:.6}
@@ -162,7 +162,7 @@ html.is-scrolling .marquee-track{animation-play-state:paused}
 .section-tag .pnum{margin-left:auto;color:var(--muted);font-size:.68rem;letter-spacing:.12em;border:1px solid var(--line);padding:4px 8px;border-radius:8px;background:rgba(7,12,24,.45);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 .about-inner,.skills-grid,.proj-grid,.contact-grid,.section-tag,.section-title,.proj-cta{position:relative;z-index:1}
 
-/* ---- BOX UNIFIÉ : brackets de coins (HUD) — verre dépoli ---- */
+/* ---- BOX UNIFIÉ : brackets de coins (HUD) - verre dépoli ---- */
 .box{position:relative;background:rgba(6,10,20,.40);border:1px solid rgba(140,205,218,.13);backdrop-filter:blur(22px) saturate(1.35);-webkit-backdrop-filter:blur(22px) saturate(1.35)}
 .bracket{position:absolute;width:13px;height:13px;border:1.5px solid rgba(140,205,218,.5);pointer-events:none;z-index:3;transition:border-color .3s,opacity .3s}
 .bracket.t{top:5px;left:5px;border-right:none;border-bottom:none;border-top-left-radius:5px}
@@ -279,7 +279,6 @@ html.is-scrolling .marquee-track{animation-play-state:paused}
 @media(max-width:900px){.tlv::before{left:6px}}
 .pill{display:inline-block;font-family:var(--mono);font-size:.62rem;letter-spacing:.05em;border-radius:99px;padding:.28rem .7rem;border:1px solid rgba(140,205,218,.24);color:var(--sky);background:rgba(6,10,20,.4)}
 .pill.ok{border-color:rgba(52,211,153,.5);color:#34d399}
-.pill.cour{border-color:rgba(224,143,61,.5);color:var(--amber)}
 .section-tag{font-family:var(--mono);font-size:.85rem;letter-spacing:.2em;text-transform:uppercase;color:var(--crimson);display:flex;align-items:center;gap:12px;margin-bottom:14px}
 .section-tag::before{content:"";width:28px;height:1px;background:linear-gradient(90deg,var(--blue),var(--crimson))}
 .section-title{position:relative;font-size:clamp(2.3rem,5vw,3.8rem);font-weight:700;margin:0 0 24px;background:linear-gradient(135deg,var(--ramp-snow) 10%,var(--ice) 35%,var(--bcyan) 55%,var(--crimson) 90%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;;line-height:1.1}
@@ -296,8 +295,8 @@ html.is-scrolling .marquee-track{animation-play-state:paused}
 
 /* ---- SKILLS ---- */
 .skills-section{padding-top:52px}
-.skills-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:30px}
-@media(max-width:900px){.skills-grid{grid-template-columns:repeat(3,1fr)}}
+.skills-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-top:30px}
+@media(max-width:1180px){.skills-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:600px){.skills-grid{grid-template-columns:repeat(2,1fr)}}
 .sk{background:rgba(6,10,20,.40);border:1px solid rgba(140,205,218,.13);padding:20px 14px 16px;text-align:center;transition:transform .35s cubic-bezier(.2,.7,.2,1),box-shadow .35s,border-color .35s;position:relative;border-radius:0;--ac:var(--bcyan);backdrop-filter:blur(20px) saturate(1.35);-webkit-backdrop-filter:blur(20px) saturate(1.35)}
 .sk:hover{transform:translateY(-4px);border-color:var(--ac);box-shadow:0 18px 44px -18px color-mix(in srgb,var(--ac) 55%,transparent)}
@@ -331,6 +330,16 @@ html.is-scrolling .marquee-track{animation-play-state:paused}
 .pcard .desc{margin:0;font-size:.9rem;color:#c2d2ea;line-height:1.55}
 .pcard .go{margin-top:10px;font-family:var(--mono);font-size:.7rem;color:var(--blue-2);display:flex;align-items:center;gap:6px}
 .pcard .go .arr{transition:transform .3s}.pcard:hover .go .arr{transform:translateX(4px)}
+/* Lien « étiré » à la Bootstrap : la vignette ET le titre ouvrent le dépôt GitHub (toute la carte
+   reste cliquable) ; la ligne d'actions repasse au-dessus pour proposer la démo locale. */
+.pcard .stretch::after{content:"";position:absolute;inset:0;z-index:1}
+/* La ligne d'actions passe AU-DESSUS du lien étiré, mais seule la zone des liens doit capter le
+   clic (sinon le blanc à droite de « Voir sur GitHub » devient une zone morte, alors qu'avant
+   toute la carte ouvrait le dépôt) : pointer-events:none sur la ligne, auto sur les liens. */
+.pcard .go{position:relative;z-index:2;pointer-events:none}
+.pcard .go a{display:inline-flex;align-items:center;gap:6px;pointer-events:auto}
+.pcard .go .go-demo{color:var(--crimson);border-left:1px solid rgba(140,205,218,.22);padding-left:12px}
+.pcard .go .go-demo:hover{color:var(--rose)}
 .proj-cta{margin-top:28px;text-align:center}
 .proj-cta a{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.8rem;letter-spacing:.05em;text-transform:uppercase;padding:12px 22px;border-radius:12px;border:1px solid var(--line);background:rgba(7,12,24,.45);color:var(--sky);transition:.25s;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
 .proj-cta a:hover{border-color:var(--blue);transform:translateY(-3px);box-shadow:0 14px 32px -16px rgba(93,159,201,.3)}
