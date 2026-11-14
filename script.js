@@ -322,8 +322,7 @@ const tLines=[
   {p:'$ whoami',out:'Expert & développeur cybersécurité',cls:'v'},
   {p:'$ cat stack.txt',out:'Python · NodeJS · C · C# · JS',cls:'v'},
   {p:'$ ./certifs --list',out:'eJPT · eCPPTv2',cls:'v'},
-  {p:'$ cat langues.txt',out:'français · anglais (TOEIC 885) · espagnol (A2)',cls:'v'},
-  {p:'$ status',out:'OK · dispo pour de nouveaux projets',cls:'ok'}
+  {p:'$ cat langues.txt',out:'français · anglais (TOEIC 885) · espagnol (A2)',cls:'v'}
 ];
 const tBody=document.getElementById('termBody');let tL=0,tC=0,tP='p';
 if(REDUCED_MOTION)tBody.innerHTML=tLines.map(l=>`<span class="p">${l.p}</span>\n<span class="${l.cls}">${l.out}</span>`).join('\n');
@@ -433,8 +432,6 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   // Pas de DPR ici : le fond est rendu à RENDER_SCALE × taille CSS (voir resize()). Le `DPR`
   // global du fichier ne concerne que le canvas de la signature.
   let reduced=motion.matches,raf=0,last=0,W=0,H=0,scrolling=false,scrollTimer=0,accumulator=0;
-  const fpsValue=document.querySelector('#fps-counter strong');
-  let fpsFrames=0,fpsStamp=performance.now();
   const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
 
   // ---------- Paramètres physiques (tunables) ----------
@@ -1187,14 +1184,6 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     clearTimeout(scrollTimer);scrollTimer=setTimeout(()=>{scrolling=false;document.documentElement.classList.remove('is-scrolling');},180);
   }
 
-  function updateFps(now){
-    if(!fpsValue)return;
-    fpsFrames++;const elapsed=now-fpsStamp;if(elapsed<500)return;
-    const fps=Math.round(fpsFrames*1000/elapsed);
-    fpsValue.textContent=String(fps);fpsValue.dataset.level=fps<30?'low':fps<55?'mid':'good';
-    fpsFrames=0;fpsStamp=now;
-  }
-
   const FIXED=1/240;
   function frame(now){
     raf=0;
@@ -1204,7 +1193,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
     let steps=0;
     while(accumulator>=FIXED&&steps<12){step(FIXED);accumulator-=FIXED;steps++;}
     if(steps===12)accumulator=0;
-    render();updateFps(now);
+    render();
     raf=requestAnimationFrame(frame);
   }
 
@@ -1212,8 +1201,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
   function start(){if(!reduced&&!document.hidden&&!raf){last=0;accumulator=0;raf=requestAnimationFrame(frame);}}
   function updateMotion(){
     reduced=motion.matches;stop();
-    if(reduced){if(fpsValue)fpsValue.textContent='-';}
-    else{fpsFrames=0;fpsStamp=performance.now();start();}
+    if(!reduced)start();
   }
 
   // Hook de debug (test visuel / fast-forward / mesure) : piloter la sim, figer un état exact
@@ -1233,7 +1221,7 @@ document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
 
   try{
     gl.clearColor(0,0,0,1);resize();render();
-    if(reduced&&fpsValue)fpsValue.textContent='-';else start();
+    if(!reduced)start();
     canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();stop();host.classList.add('is-fallback');},{passive:false});
     document.addEventListener('visibilitychange',()=>document.hidden?stop():start(),{passive:true});
     addEventListener('resize',resize,{passive:true});
