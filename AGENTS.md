@@ -38,7 +38,7 @@ Ce fichier décrit les **guidelines de travail** que tout agent doit suivre pour
 ### 2.5 Cache busting
 - Toute modification de `script.js` doit incrémenter la **version du cache** dans `index.html` :
   `<script src="./script.js?v=N"></script>`
-- On est actuellement à `v=112` (`style.css` : `v=49`).
+- On est actuellement à `v=113` (`style.css` : `v=49`).
 
 ### 2.6 Outils de validation
 - Serveur local : `python3 -m http.server <port>`.
@@ -259,3 +259,24 @@ Prochaine direction suggérée (si l'utilisateur continue) :
 - Coût tiers restant, non traité : Google Tag Manager (~50-100 ms de thread principal) + 2 familles Google Fonts ; Lighthouse/PageSpeed pour chiffrer.
 - Peaufiner l'esthétique (contour des gouttes, lueur du brûleur).
 
+---
+
+## 6. Déploiement (robinzmuda.fr)
+
+- **Hébergement** : VPS IONOS `217.160.247.59`, nginx 1.18 (Ubuntu), racine `root /var/www/portfolio` (vhost actif : `/etc/nginx/sites-available/default`, `server_name robinzmuda.fr www.robinzmuda.fr`). Accès : `ssh root@217.160.247.59` (clé `~/.ssh/id_ed25519`, sans mot de passe).
+- **Le site publié est un clone git du dépôt GitHub** (`/var/www/portfolio/.git`, remote `https://github.com/Anhydrite/portfolio`). Déployer = mettre ce clone à jour, pas copier les fichiers à la main :
+
+  ```bash
+  ssh root@217.160.247.59 'cd /var/www/portfolio \
+    && tar czf /root/portfolio-backup-$(date +%Y%m%d-%H%M%S).tar.gz --exclude=.git . \
+    && git fetch origin master && git reset --hard origin/master'
+  ```
+
+- **Sauvegarde d'abord, toujours** : `tar czf /root/portfolio-backup-<date>.tar.gz --exclude=.git .` (3,4 Mo). Les anciennes sauvegardes sont dans `/root/`.
+- ⚠️ **L'historique du clone serveur a déjà divergé** (commit `0a57e7c` « Sync portfolio depuis robinzmuda.fr » présent seulement là-bas) : la référence est **GitHub**, donc `git reset --hard origin/master` et non `git pull` (qui produirait un merge incohérent). Une modification faite directement sur le serveur doit être reportée dans le dépôt avant (cas réel : l'URL LinkedIn `linkedin.com/in/rzmuda` n'existait que sur le serveur).
+- `git reset --hard` **supprime les fichiers suivis retirés** (les `.php` de test, `test.css`, `miam.html`…) mais **pas les fichiers non suivis** : vérifier avec `git status --porcelain --ignored`.
+- Aucun PHP n'est installé (PHP-FPM absent) : après déploiement, `/main.php`, `/index.php`, `/xxe.php` renvoient **404**. Le vhost `default` a un `try_files $uri $uri/ =301 /index.html` qui renvoie **`index.html` en 200 pour tout chemin inconnu** (soft 404) : ne pas conclure d'un `200` qu'un fichier existe, contrôler `content_type` et `size_download` (`curl -o /dev/null -w '%{http_code} %{content_type} %{size_download}'`).
+- **Vérification après déploiement** : `curl` sur `/`, `/script.js?v=<N>`, `/style.css?v=<N>`, une image et une démo ; puis le harnais directement sur l'URL publique :
+  `node tools/cdp-harness.mjs --url https://robinzmuda.fr/index.html --w 1440 --h 900 --dpr 1 --wait 4000 --evalfile <check.js> --shot /tmp/live.png --out /tmp/live.json`
+  Le `check.js` doit confirmer `document.title`, `!!window.__lava`, la taille du canvas, `is-fallback` absent, 2 occurrences du lien LinkedIn, 0 tiret cadratin, et aucune exception console.
+- Aucun cache-busting de déploiement n'est nécessaire : `index.html` référence `script.js?v=N` et `style.css?v=N`, et les fichiers sont servis par nginx sans cache immuable.
