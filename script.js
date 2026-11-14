@@ -104,7 +104,10 @@ const sigC=document.getElementById('sig'),sigCtx=sigC.getContext('2d'),DPR=Math.
 async function initSig(){
   /* Police : Lavishly Yours (calligraphie, chargée localement) - les DEUX mots dans cette police */
   let ok=false;
-  try{const f=new FontFace('Lavishly Yours','url(./assets/font/LavishlyYours-Regular.ttf)');await f.load();document.fonts.add(f);ok=true;}catch(e){}
+    // WOFF2 sous-ensemble (Latin de base + Latin-1, 35 Ko au lieu de 148 Ko) : la police ne sert
+  // qu'à la signature, donc pas besoin de ses 648 glyphes. Si le chargement échoue (très vieux
+  // navigateur), on retombe sur `cursive`.
+  try{const f=new FontFace('Lavishly Yours','url(./assets/font/LavishlyYours-Regular.woff2)');await f.load();document.fonts.add(f);ok=true;}catch(e){}
   const famC=ok?'Lavishly Yours':'cursive';
   const txtR='Robin';        // calligraphié en Lavishly Yours
   const txtZ='Zmuda';        // calligraphié en Lavishly Yours (même police que Robin)
