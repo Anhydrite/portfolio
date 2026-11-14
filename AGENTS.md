@@ -46,6 +46,10 @@ Ce fichier décrit les **guidelines de travail** que tout agent doit suivre pour
   - Pilote directement `chrome-headless-shell` (aucune dépendance npm) : évaluation JS asynchrone (`--evalfile`), capture d'écran (`--shot`), profil CPU CDP (`--profile`), émulation de média (`--media prefers-reduced-motion=reduce`), viewport/DPR (`--w/--h/--dpr`).
   - Le résultat est renvoyé en JSON sur stdout **et** écrit dans `--out` (utiliser `--out` : stdout est tronqué par l'outil d'appel au-delà de 64 KB).
   - `CHROME_PATH` permet de forcer le binaire ; par défaut il prend le Chromium de Playwright.
+  - ⚠️ **`/opt/google/chrome/chrome` est un lien vers `/root/.cache/ms-playwright/...`, illisible** (permissions 700 sur `/root`). Installer un shell accessible : `pip install playwright && playwright install chromium-headless-shell`, puis `CHROME_PATH=~/.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell`.
+  - Le profil CPU (`--profile`) démarre **après** le `--wait` : il ne couvre que l'exécution du `--evalfile`, pas la phase de chargement.
+  - Un `--evalfile` qui commence par une affectation doit la terminer par `;` : sinon l'IIFE suivante est appelée comme une fonction (`[...] is not a function`).
+  - **Deux runs indépendants ne rejouent pas le même état** (le pas de temps réel de `frame()` et la boucle de la signature diffèrent). Pour un A/B visuel : exporter `snapshot()` puis `restore()` avant la capture. Contrôle de reproductibilité mesuré (même code deux fois) : `mean 0,03/255` mais `max 219` sur 0,05 % des pixels (bords) → toujours publier `mean` ET `max`.
 - **`cdax`** (chrome-devtools-axi) : le lanceur `~/.local/bin/cdax` avait été écrasé (fichier corrompu) — réparé — mais le bridge ne démarre pas Chrome dans cet environnement (`Target closed`). Le harnais ci-dessus le remplace.
 - ⚠️ **Pas de GPU** sur cette machine (`/dev/dri/card0` = `vgem`) : le WebGL passe par **SwiftShader** (rendu logiciel). Les FPS absolus ne sont donc **pas représentatifs** ; en revanche les **rapports** de coût (avant/après, variantes) et tous les comptages de travail (fragments, pas de simulation, ms de CPU JS) le sont.
 - Hook de debug : `window.__lava` expose `{P, step(h), render(), snapshot(), restore(s), simTime, pairs, canvasPx, rebuild(), pairList(), _densTex}` — pilotage de la sim, gel d'un état exact (test de reproductibilité) et comptage du voisinage.
@@ -168,6 +172,28 @@ Règles d'équilibre importantes :
 - **Une liste de voisins figée en début de pas est fausse** : la relaxation de pression peut rapprocher deux particules de ~0.045 (déplacements clampés à `maxDisp`), bien plus que la marge entre `H_SMOOTH` et `COH_R` (0.0126). `buildNeighbors()` est donc rappelé **après chaque passe** de pression (3 constructions par pas, **0,065 ms chacune** — soit ~20 % du pas) : c'est exactement ce que faisait l'ancienne boucle O(N²), qui retestait toutes les paires à chaque étape. Correction indispensable à l'équivalence, et abordable parce que la liste plate rend la construction très bon marché.
 - **Tester une paire 9 fois est du gaspillage** : le balayage 3×3 particule par particule reteste chaque paire jusqu'à 9 fois (et filtre `j > i`). Le **parcours des paires de cellules** (paires internes + demi-voisinage E/SE/S/SO) teste chaque paire une seule fois : **0,143 → 0,065 ms** par reconstruction (×2,2) à ensemble de paires identique, et il supprime la tranche `pairStart` par particule (les boucles itèrent simplement la liste plate).
 - **Une liste de voisins figée en début de pas est fausse** : la relaxation de pression peut rapprocher deux particules de ~0.045 (déplacements clampés à `maxDisp`), bien plus que la marge entre `H_SMOOTH` et `COH_R` (0.0126). `buildNeighbors()` est donc rappelé **après chaque passe** de pression (3 constructions par pas) : c'est ce que faisait l'ancienne boucle O(N²), qui retestait toutes les paires à chaque étape. Coût négligeable (voir §3.4), correction indispensable à l'équivalence.
+
+### 3.6 Coût de composition mesuré (2026-11)
+
+Mesures sur `chrome-headless-shell` + **SwiftShader** (la machine de dev n'a pas de GPU), viewport 1440×900 sauf mention. Méthode : gel de la simulation (`document.hidden`), puis période de frame **médiane** en retirant un calque à la fois.
+
+| Élément retiré | Période de frame |
+|---|---|
+| rien (site complet) | **50 ms** (20 FPS) |
+| canvas `#lava-canvas` masqué | **16,7 ms** (= vsync 60 FPS) |
+| `filter` du canvas (`blur(54px) saturate(1.18)`) | **16,7 ms** |
+| `backdrop-filter` (45 éléments mesurés) | 49,9 ms (négligeable) |
+| `will-change` / `transform:translateZ(0)` | 49,9 ms (négligeable) |
+| `mix-blend-mode:screen` de `.lava-tint` | 33,4 ms (rejeté, voir plus bas) |
+| boîte CSS du canvas à 50 % (`width:50%`) | 33,3 ms |
+
+Conclusions :
+- **Le coût est le compositeur, pas le rendu WebGL.** `render()` + `gl.finish()` coûte ~0,01 ms, et une variante `RENDER_SCALE=0.35` + texture 384×240 ne change **rien** à la période de frame. Le coût suit la **surface écran floutée**, pas la résolution de rendu : baisser `RENDER_SCALE` ou `DENS_*` ne soulage pas le scroll (contrairement à ce que laissait croire l'optimisation « résolution de la lave », qui a supprimé du travail GPU réel mais pas le poste dominant).
+- Le coût croît avec la surface écran : **50 ms** (1440×900), **67 ms** (1920×1080), **100-117 ms** (2560×1440).
+- **CPU JS** : `step()` 0,34-0,43 ms par pas, 4 pas par frame à 60 FPS → ~1,6 ms/frame, soit **~6 % d'un cœur**. Tout le reste du temps est du compositeur (nœud `(program)` du profil, non attribuable au JS).
+- **`mix-blend-mode:screen` sur `.lava-tint`** : gagnait 50 → 33 ms en SwiftShader, mais le diff visuel est massif (`mean 4,5/255`, 48 % des pixels > 2/255, `max 218`) et le gain disparaît à 2560×1440 → **rejeté**. À retester sur GPU réel si la marge manque (c'est un coût de relecture plein écran de la destination).
+- **Extrapolation petit PC** : sur un GPU intégré, un flou plein écran 1440×900 coûte typiquement 1-2 ms → 60 FPS attendus. Le risque n'existe qu'en **rendu logiciel** (VM sans accélération, pilote absent) : ~20 FPS en 900p, ~10 FPS en 1440p. `prefers-reduced-motion` désactive déjà entièrement la lave.
+- **Leviers** si l'on veut de la marge : baisser le rayon de flou (54 → 32 px, quasi invisible puisque tout est déjà flou) ou réduire la boîte CSS du canvas (~70 %, étirée). Changer la résolution de rendu est un faux levier.
 
 ---
 

@@ -381,7 +381,7 @@ projectGrid.querySelectorAll('img').forEach(img=>{if(img.decode)img.decode().cat
 /* ---- Réseaux ---- */
 const socials=[
   {icon:'./assets/twitter.png',l:'Twitter',u:'https://twitter.com/RobineEtBatman',ext:true},
-  {icon:'./assets/lk.png',l:'LinkedIn',u:'https://www.linkedin.com/in/robin-zmuda-bb5288200/',ext:true},
+  {icon:'./assets/lk.png',l:'LinkedIn',u:'https://www.linkedin.com/in/rzmuda',ext:true},
   {icon:'./assets/Root-Me.png',l:'RootMe',u:'https://www.root-me.org/Iced?lang=fr#23374ededbc440a52699097304859043',ext:true},
   {icon:'./assets/github.png',l:'Github',u:'https://github.com/Anhydrite',ext:true},
   {icon:'./assets/discord.png',l:'Discord : Anhydrite#8817',u:'#',ext:false},
