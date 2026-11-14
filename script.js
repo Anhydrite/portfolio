@@ -366,19 +366,84 @@ const repos=[
   {name:'SimpleXSSWebsite',lang:'HTML',desc:'Expérimentations XSS en conditions réelles.',stars:0,img:null,url:'https://github.com/Anhydrite/SimpleXSSWebsite'},
   {name:'GarticPhoneAutoDrawer',lang:'Python',desc:'Automatisation de dessin sur Gartic Phone.',stars:2,img:null,url:'https://github.com/Anhydrite/GarticPhoneAutoDrawer'}
 ];
-const lc={Python:'#2b6cb0',Go:'#0967d2',JavaScript:'#b08f00',TypeScript:'#0967d2',HTML:'#e8722a'};
+const lc={Python:'#2b6cb0',Go:'#0967d2',JavaScript:'#b08f00',TypeScript:'#0967d2',HTML:'#e8722a',
+  C:'#6b7280','C++':'#8b5cf6','C#':'#3f8f4a',PHP:'#6a5a9e',Shell:'#4e9a4e',CSS:'#3f7fbf',Rust:'#b45309',Java:'#a05a2c',Lua:'#2563a8',Vue:'#2f9e7a'};
+/* Vignette générée (SVG local, aucun réseau) : fond sombre dégradé, initiale en gros, teinte
+   dérivée du LANGAGE quand il est connu, sinon du NOM (donc stable d'un chargement à l'autre).
+   Utilisée pour tout dépôt sans capture locale, et comme repli si une capture ne charge pas. */
 function phImg(p){
-  const col=lc[p.lang]||'#5d9fc9';
-  const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='420' height='236'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${col}' stop-opacity='.3'/><stop offset='1' stop-color='#081221' stop-opacity='.92'/></linearGradient></defs><rect width='420' height='236' fill='url(#g)'/><text x='210' y='150' font-family='monospace' font-size='92' fill='#d7e9f8' fill-opacity='.45' text-anchor='middle'>${(p.name[0]||'❯').toUpperCase()}</text><circle cx='60' cy='52' r='4' fill='#d7e9f8' fill-opacity='.3'/><circle cx='360' cy='190' r='6' fill='#8ccdda' fill-opacity='.35'/><circle cx='320' cy='48' r='3' fill='#8ccdda' fill-opacity='.25'/></svg>`;
+  let h=0; const nm=String(p.name||'x');
+  for(let i=0;i<nm.length;i++)h=(h*31+nm.charCodeAt(i))%360;
+  const col=lc[p.lang]||`hsl(${h} 52% 46%)`;
+  const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='420' height='236'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${col}' stop-opacity='.34'/><stop offset='1' stop-color='#081221' stop-opacity='.94'/></linearGradient></defs><rect width='420' height='236' fill='url(#g)'/><text x='210' y='150' font-family='monospace' font-size='92' fill='#d7e9f8' fill-opacity='.45' text-anchor='middle'>${(nm[0]||'❯').toUpperCase()}</text><circle cx='60' cy='52' r='4' fill='#d7e9f8' fill-opacity='.3'/><circle cx='360' cy='190' r='6' fill='#8ccdda' fill-opacity='.35'/><circle cx='320' cy='48' r='3' fill='#8ccdda' fill-opacity='.25'/></svg>`;
   return 'data:image/svg+xml,'+encodeURIComponent(svg);
 }
 const projectGrid=document.getElementById('projGrid');
-/* Cartes projets : la carte n'est plus un <a> englobant (impossible d'y imbriquer le lien de
-   démo) - la vignette et le titre portent un lien « étiré » vers le dépôt GitHub (toute la
-   carte reste cliquable), et la ligne d'actions repasse au-dessus pour proposer la démo locale
-   (./projects/<nom>/, cf. repos[].demo) quand elle existe. */
-projectGrid.innerHTML=repos.map((p,i)=>`<article class="pcard box r" style="transition-delay:${(i%3)*.08}s"><i class="bracket t"></i><i class="bracket b"></i><span class="thumb"><img loading="lazy" decoding="async" src="${p.img||phImg(p)}" alt=""></span><div class="body"><div class="meta"><span class="ld" style="background:${lc[p.lang]||'var(--muted)'}"></span><span>${p.lang}</span>${p.stars>0?`<span class="star">★ ${p.stars}</span>`:''}</div><h3><a class="stretch" href="${p.url}" target="_blank" rel="noopener">${p.name}</a></h3><p class="desc">${p.desc}</p><div class="go"><a class="go-repo" href="${p.url}" target="_blank" rel="noopener">Voir sur GitHub <span class="arr">→</span></a>${p.demo?`<a class="go-demo" href="${p.demo}" target="_blank" rel="noopener">▶ Démo live <span class="arr">→</span></a>`:''}</div></div></article>`).join('');
-projectGrid.querySelectorAll('img').forEach(img=>{if(img.decode)img.decode().catch(()=>{});});
+
+/* ---- Projets : liste DYNAMIQUE (API GitHub) ----
+   La liste `repos` ci-dessus sert de contenu IMMÉDIAT (affiché sans attendre le réseau) et de
+   repli : quota anonyme épuisé (60 req/h par IP), réseau coupé, ouverture en file://.
+   Ensuite on interroge /users/<user>/repos et on réaffiche la grille :
+     1. tri par ÉTOILES décroissantes ;
+     2. à étoiles égales, le plus récemment poussé d'abord (pushed_at) : c'est ce qui remplit la
+        grille quand les dépôts étoilés sont moins nombreux que PROJ_COUNT.
+   Les métadonnées curatées (description française, vignette locale, démo de ./projects/) sont
+   rattachées par nom de dépôt ; les nouveaux dépôts prennent la description GitHub et l'aperçu
+   social généré par GitHub, avec repli sur la vignette SVG locale si l'image ne charge pas.
+   Résultat mis en cache 6 h dans localStorage (une visite par demi-journée = 1 requête). */
+const GH_USER='Anhydrite', GH_CACHE_KEY='rz-gh-repos-v1', GH_TTL=6*3600*1000, PROJ_COUNT=12;
+const curated={};
+repos.forEach(r=>{curated[r.name.toLowerCase()]=r;});
+const escHtml=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function renderProjects(list){
+  /* La carte n'est pas un <a> englobant (on ne peut pas y imbriquer le lien de démo) : la
+     vignette et le titre portent un lien « étiré » vers GitHub, la ligne d'actions repasse
+     au-dessus (z-index:2) pour proposer la démo locale quand elle existe. */
+  projectGrid.innerHTML=list.map((p,i)=>`<article class="pcard box r" data-name="${escHtml(p.name)}" data-lang="${escHtml(p.lang)}" style="transition-delay:${(i%3)*.08}s"><i class="bracket t"></i><i class="bracket b"></i><span class="thumb"><img loading="lazy" decoding="async" src="${escHtml(p.img||phImg(p))}" alt=""></span><div class="body"><div class="meta"><span class="ld" style="background:${lc[p.lang]||'var(--muted)'}"></span><span>${escHtml(p.lang)}</span>${p.stars>0?`<span class="star">★ ${p.stars}</span>`:''}</div><h3><a class="stretch" href="${escHtml(p.url)}" target="_blank" rel="noopener">${escHtml(p.name)}</a></h3><p class="desc">${escHtml(p.desc)}</p><div class="go"><a class="go-repo" href="${escHtml(p.url)}" target="_blank" rel="noopener">Voir sur GitHub <span class="arr">→</span></a>${p.demo?`<a class="go-demo" href="${escHtml(p.demo)}" target="_blank" rel="noopener">▶ Démo live <span class="arr">→</span></a>`:''}</div></div></article>`).join('');
+  /* Une vignette distante peut échouer (GitHub indisponible) : repli sur la vignette SVG
+     locale, dérivée du nom et du langage mémorisés sur la carte. */
+  projectGrid.querySelectorAll('.thumb img').forEach(img=>{
+    if(img.decode)img.decode().catch(()=>{});
+    img.addEventListener('error',()=>{
+      const card=img.closest('.pcard');
+      img.src=phImg({name:card?.dataset.name||'❯',lang:card?.dataset.lang||''});
+    },{once:true});
+  });
+  observeReveals();
+}
+
+function sortProjects(list){
+  return list.slice()
+    .sort((a,b)=>b.stars-a.stars||String(b.pushed||'').localeCompare(String(a.pushed||'')))
+    .slice(0,PROJ_COUNT);
+}
+
+async function loadProjects(){
+  let raw=null;
+  try{
+    const cached=JSON.parse(localStorage.getItem(GH_CACHE_KEY)||'null');
+    if(cached&&Array.isArray(cached.r)&&Date.now()-cached.t<GH_TTL)raw=cached.r;
+  }catch(e){}
+  if(!raw){
+    try{
+      const res=await fetch(`https://api.github.com/users/${GH_USER}/repos?per_page=100&sort=pushed`,{headers:{Accept:'application/vnd.github+json'}});
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      raw=(await res.json()).filter(r=>!r.fork).map(r=>({name:r.name,full:r.full_name,desc:r.description||'',lang:r.language||'',stars:r.stargazers_count||0,pushed:r.pushed_at,url:r.html_url}));
+      try{localStorage.setItem(GH_CACHE_KEY,JSON.stringify({t:Date.now(),r:raw}));}catch(e){}
+    }catch(e){raw=null;}
+  }
+  if(!raw||!raw.length)return;   // on conserve la liste curatée déjà affichée
+  const list=sortProjects(raw).map(r=>{
+    const m=curated[r.name.toLowerCase()]||{};
+    return {name:r.name,lang:r.lang||m.lang||'Dépôt',desc:m.desc||r.desc||'Dépôt public, sans description.',stars:r.stars,url:r.url,img:m.img||null,demo:m.demo||null,pushed:r.pushed};
+  });
+  const signature=list.map(p=>p.name+'#'+p.stars).join('|');
+  if(signature===projectGrid.dataset.sig)return;   // rien de neuf : on ne reconstruit pas le DOM
+  projectGrid.dataset.sig=signature;
+  renderProjects(list);
+}
+
 
 /* ---- Réseaux ---- */
 const socials=[
@@ -393,7 +458,16 @@ document.getElementById('socGrid').innerHTML=socials.map(s=>`<a class="soc box" 
 
 /* ---- Reveal ---- */
 const ioR=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');ioR.unobserve(e.target);}});},{threshold:.08});
-document.querySelectorAll('.r').forEach(el=>ioR.observe(el));
+/* Les cartes projets peuvent être reconstruites après le chargement (liste GitHub) : chaque
+   rendu ré-observe les éléments .r pas encore révélés, sinon ils resteraient à opacity:0. */
+function observeReveals(){document.querySelectorAll('.r:not(.in)').forEach(el=>ioR.observe(el));}
+observeReveals();
+
+/* Grille projets : rendu immédiat (liste curatée) puis rafraîchissement réseau. Ces appels sont
+   APRÈS la création de l'observer de reveal : les cartes reconstruites sont ré-observées par
+   observeReveals(), sinon elles resteraient invisibles (opacity:0). */
+renderProjects(repos);
+loadProjects();
 
 /* ---- TextScramble (titres) ---- */
 (function(){
